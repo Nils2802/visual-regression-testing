@@ -1,14 +1,33 @@
 {
   "name": "visual-regression-testing",
-  "version": "1.0.0",
-  "description": "",
-  "main": "dist/index.js",
+  "version": "0.1.0",
+  "private": true,
   "scripts": {
-    "build": "tsc"
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "test": "DATABASE_URL=file:./prisma/test.db vitest run",
+    "db:push": "prisma db push"
   },
-  "dependencies": {},
+  "dependencies": {
+    "@prisma/client": "^7.8.0",
+    "next": "^16.2.10",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7"
+  },
   "devDependencies": {
-    "typescript": "^5.5.3"
-  },
-  "private": true
+    "@types/node": "^26.1.0",
+    "@types/pngjs": "^6.0.5",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "pixelmatch": "^7.2.0",
+    "playwright": "^1.61.1",
+    "pngjs": "^7.0.0",
+    "prisma": "^6.19.3",
+    "sharp": "^0.35.3",
+    "tsx": "^4.23.0",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.10"
+  }
 }

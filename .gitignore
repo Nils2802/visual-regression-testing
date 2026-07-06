@@ -9,3 +9,10 @@ yarn-error.log*
 .pnp.js
 
 .vscode/*
+
+.next/
+data/
+prisma/*.db
+prisma/*.db-journal
+.idea/
+.DS_Store
