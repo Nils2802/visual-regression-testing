@@ -17,3 +17,4 @@ prisma/*.db-journal
 .idea/
 .DS_Store
 *.tsbuildinfo
+.env

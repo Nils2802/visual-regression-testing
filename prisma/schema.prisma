@@ -1,0 +1,173 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Project {
+  id            String        @id @default(cuid())
+  name          String
+  figmaToken    String? // encrypted at rest (encryption in phase 4)
+  diffThreshold Float         @default(0.01)
+  crawlStartUrls String       @default("[]") // JSON string[]
+  crawlMaxDepth Int           @default(3)
+  crawlMaxPages Int           @default(50)
+  crawlDenylist String        @default("[\"logout\",\"delete\",\"remove\",\"sign out\"]") // JSON string[]
+  createdAt     DateTime      @default(now())
+  environments  Environment[]
+  viewports     Viewport[]
+  baselines     Baseline[]
+  runs          Run[]
+  ignoreRules   IgnoreRule[]
+  apiTokens     ApiToken[]
+}
+
+model Environment {
+  id        String  @id @default(cuid())
+  projectId String
+  name      String
+  baseUrl   String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  runs      Run[]   @relation("testEnv")
+}
+
+model Viewport {
+  id        String           @id @default(cuid())
+  projectId String
+  name      String
+  width     Int
+  height    Int
+  project   Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  targets   BaselineTarget[]
+  results   RunResult[]
+}
+
+model Baseline {
+  id              String           @id @default(cuid())
+  projectId       String
+  name            String
+  pagePath        String // joined with environment baseUrl at run time
+  elementSelector String? // element-scoped baseline when set
+  diffThreshold   Float? // overrides project default
+  maskSelectors   String           @default("[]") // JSON string[]
+  sourceType      String // figma | upload | capture
+  syncStatus      String           @default("ok") // ok | sync-error
+  createdAt       DateTime         @default(now())
+  project         Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  targets         BaselineTarget[]
+  results         RunResult[]
+}
+
+model BaselineTarget {
+  id           String            @id @default(cuid())
+  baselineId   String
+  viewportId   String
+  figmaFileKey String?
+  figmaNodeId  String?
+  baseline     Baseline          @relation(fields: [baselineId], references: [id], onDelete: Cascade)
+  viewport     Viewport          @relation(fields: [viewportId], references: [id], onDelete: Cascade)
+  versions     BaselineVersion[]
+
+  @@unique([baselineId, viewportId])
+}
+
+model BaselineVersion {
+  id        String         @id @default(cuid())
+  targetId  String
+  imagePath String
+  status    String         @default("pending") // pending | approved | rejected
+  isActive  Boolean        @default(false) // exactly one active approved version per target
+  createdAt DateTime       @default(now())
+  target    BaselineTarget @relation(fields: [targetId], references: [id], onDelete: Cascade)
+}
+
+model Run {
+  id                     String        @id @default(cuid())
+  projectId              String
+  environmentId          String
+  referenceEnvironmentId String? // compare runs only
+  type                   String        @default("visual") // visual | compare | crawl
+  trigger                String // manual | schedule | api
+  status                 String        @default("queued") // queued | running | done | failed
+  viewportIds            String        @default("[]") // JSON string[]; empty = all project viewports
+  error                  String?
+  createdAt              DateTime      @default(now())
+  startedAt              DateTime?
+  finishedAt             DateTime?
+  project                Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  environment            Environment   @relation("testEnv", fields: [environmentId], references: [id], onDelete: Cascade)
+  results                RunResult[]
+  crawlActions           CrawlAction[]
+}
+
+model RunResult {
+  id                 String     @id @default(cuid())
+  runId              String
+  baselineId         String
+  viewportId         String
+  captureImagePath   String?
+  referenceImagePath String? // compare runs
+  diffImagePath      String?
+  visualStatus       String? // pass | diff | fail | new
+  functionalStatus   String? // pass | fail
+  diffRatio          Float?
+  sizeMismatch       Boolean    @default(false)
+  error              String?
+  run                Run        @relation(fields: [runId], references: [id], onDelete: Cascade)
+  baseline           Baseline   @relation(fields: [baselineId], references: [id], onDelete: Cascade)
+  viewport           Viewport   @relation(fields: [viewportId], references: [id], onDelete: Cascade)
+  logEntries         LogEntry[]
+}
+
+model LogEntry {
+  id            String       @id @default(cuid())
+  resultId      String?
+  crawlActionId String?
+  type          String // console-error | console-warning | page-error | http-error | network-error
+  origin        String       @default("test") // test | reference
+  message       String
+  url           String?
+  httpStatus    Int?
+  stack         String?
+  ignored       Boolean      @default(false)
+  ignoreRuleId  String?
+  timestamp     DateTime     @default(now())
+  result        RunResult?   @relation(fields: [resultId], references: [id], onDelete: Cascade)
+  crawlAction   CrawlAction? @relation(fields: [crawlActionId], references: [id], onDelete: Cascade)
+}
+
+model IgnoreRule {
+  id             String  @id @default(cuid())
+  projectId      String
+  entryType      String? // restrict to one log entry type
+  urlPattern     String? // regex
+  messagePattern String? // regex
+  reason         String
+  project        Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model CrawlAction {
+  id              String     @id @default(cuid())
+  runId           String
+  pageUrl         String
+  elementSelector String
+  elementText     String
+  action          String
+  resultUrl       String?
+  timestamp       DateTime   @default(now())
+  run             Run        @relation(fields: [runId], references: [id], onDelete: Cascade)
+  logEntries      LogEntry[]
+}
+
+model ApiToken {
+  id         String    @id @default(cuid())
+  projectId  String
+  name       String
+  tokenHash  String
+  createdAt  DateTime  @default(now())
+  lastUsedAt DateTime?
+  project    Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
