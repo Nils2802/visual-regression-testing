@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { saveImage, loadImage } from '@/lib/storage';
 import fs from 'fs/promises';
 import path from 'path';
@@ -7,6 +7,10 @@ import os from 'os';
 describe('storage', () => {
   beforeEach(async () => {
     process.env.DATA_DIR = await fs.mkdtemp(path.join(os.tmpdir(), 'vrt-'));
+  });
+
+  afterEach(() => {
+    delete process.env.DATA_DIR;
   });
 
   it('saves and loads a png, returns relative path', async () => {
@@ -21,5 +25,14 @@ describe('storage', () => {
     const rel = await saveImage('diffs', 'r1', Buffer.from('x'));
     const full = path.join(process.env.DATA_DIR!, rel);
     await expect(fs.stat(full)).resolves.toBeTruthy();
+  });
+
+  it('rejects path traversal in saveImage id', async () => {
+    await expect(saveImage('captures', '../../x', Buffer.from('x'))).rejects.toThrow();
+  });
+
+  it('rejects path traversal in loadImage relPath', async () => {
+    await expect(loadImage('../secret')).rejects.toThrow();
+    await expect(loadImage('../../../etc/passwd')).rejects.toThrow();
   });
 });
