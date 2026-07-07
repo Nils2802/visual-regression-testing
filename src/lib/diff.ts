@@ -11,8 +11,8 @@ export interface DiffResult {
 }
 
 export async function diffImages(baselinePng: Buffer, capturePng: Buffer): Promise<DiffResult> {
-  let base = PNG.sync.read(baselinePng);
-  let cap = PNG.sync.read(capturePng);
+  let base: PNG = PNG.sync.read(baselinePng);
+  let cap: PNG = PNG.sync.read(capturePng);
   let sizeMismatch = false;
 
   if (cap.width !== base.width) {
