@@ -45,6 +45,26 @@ describe('diffImages', () => {
     );
     expect(result.sizeMismatch).toBe(true);
     expect(result.ratio).toBeGreaterThan(0.2); // ~50 rows of 150 are padding
+
+    // both inputs get padded up to the taller height, so the diff output
+    // dimensions reflect max(baseline.height, capture.height), not the
+    // (shorter) baseline height.
+    const png = PNG.sync.read(result.diffPng);
+    expect(png.width).toBe(100);
+    expect(png.height).toBe(150);
+  });
+
+  it('baseline taller than capture → capture is the one padded, diff still at max height', async () => {
+    const result = await diffImages(
+      solidPng(100, 150, [255, 0, 0]),
+      solidPng(100, 100, [255, 0, 0])
+    );
+    expect(result.sizeMismatch).toBe(true);
+    expect(result.ratio).toBeGreaterThan(0.2); // ~50 rows of 150 are padding
+
+    const png = PNG.sync.read(result.diffPng);
+    expect(png.width).toBe(100);
+    expect(png.height).toBe(150);
   });
 
   it('produces a diff png with baseline dimensions', async () => {
