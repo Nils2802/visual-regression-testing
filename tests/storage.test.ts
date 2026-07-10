@@ -28,11 +28,13 @@ describe('storage', () => {
   });
 
   it('rejects path traversal in saveImage id', async () => {
-    await expect(saveImage('captures', '../../x', Buffer.from('x'))).rejects.toThrow();
+    await expect(saveImage('captures', '../../x', Buffer.from('x'))).rejects.toThrow(
+      'escapes data directory'
+    );
   });
 
   it('rejects path traversal in loadImage relPath', async () => {
-    await expect(loadImage('../secret')).rejects.toThrow();
-    await expect(loadImage('../../../etc/passwd')).rejects.toThrow();
+    await expect(loadImage('../secret')).rejects.toThrow('escapes data directory');
+    await expect(loadImage('../../../etc/passwd')).rejects.toThrow('escapes data directory');
   });
 });

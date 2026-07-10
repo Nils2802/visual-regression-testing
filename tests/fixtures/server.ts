@@ -17,8 +17,10 @@ export function startFixtureServer(pages: Record<string, string>): Promise<Fixtu
     res.writeHead(200, { 'content-type': 'text/html' });
     res.end(html);
   });
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
+    server.once('error', reject);
     server.listen(0, '127.0.0.1', () => {
+      server.removeListener('error', reject);
       const port = (server.address() as AddressInfo).port;
       resolve({
         url: `http://127.0.0.1:${port}`,

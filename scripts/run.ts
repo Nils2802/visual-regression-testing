@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { chromium } from 'playwright';
 import { prisma } from '../src/lib/db';
 import { executeRun } from '../src/lib/runner';
@@ -14,8 +15,11 @@ async function main() {
     data: { projectId, environmentId: env.id, type: 'visual', trigger: 'manual' },
   });
   const browser = await chromium.launch();
-  await enqueue(() => executeRun(run.id, browser));
-  await browser.close();
+  try {
+    await enqueue(() => executeRun(run.id, browser));
+  } finally {
+    await browser.close();
+  }
 
   const done = await prisma.run.findUniqueOrThrow({
     where: { id: run.id },

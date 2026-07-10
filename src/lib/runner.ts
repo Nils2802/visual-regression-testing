@@ -14,12 +14,12 @@ export async function executeRun(runId: string, browser: Browser): Promise<void>
       environment: true,
     },
   });
-  await prisma.run.update({
-    where: { id: runId },
-    data: { status: 'running', startedAt: new Date() },
-  });
-
   try {
+    await prisma.run.update({
+      where: { id: runId },
+      data: { status: 'running', startedAt: new Date() },
+    });
+
     const referenceEnv = run.referenceEnvironmentId
       ? await prisma.environment.findUniqueOrThrow({ where: { id: run.referenceEnvironmentId } })
       : null;
