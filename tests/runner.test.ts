@@ -150,4 +150,40 @@ describe('executeRun — compare', () => {
     });
     expect(versions).toHaveLength(0);
   });
+
+  it('referenceEnvironmentId pointing at missing environment → run failed, not stuck at queued', async () => {
+    const { project, env } = await seed();
+    const run = await prisma.run.create({
+      data: {
+        projectId: project.id,
+        environmentId: env.id,
+        referenceEnvironmentId: 'nonexistent-env-id',
+        type: 'compare',
+        trigger: 'manual',
+      },
+    });
+    await executeRun(run.id, browser);
+
+    const done = await prisma.run.findUniqueOrThrow({ where: { id: run.id } });
+    expect(done.status).toBe('failed');
+    expect(done.error).toBeTruthy();
+    expect(done.startedAt).toBeTruthy();
+    expect(done.finishedAt).toBeTruthy();
+  });
+
+  it('compare run without referenceEnvironmentId → run failed, no baseline versions created', async () => {
+    const { project, env } = await seed();
+    const run = await prisma.run.create({
+      data: { projectId: project.id, environmentId: env.id, type: 'compare', trigger: 'manual' },
+    });
+    await executeRun(run.id, browser);
+
+    const done = await prisma.run.findUniqueOrThrow({ where: { id: run.id } });
+    expect(done.status).toBe('failed');
+    expect(done.error).toBeTruthy();
+    const versions = await prisma.baselineVersion.findMany({
+      where: { target: { baseline: { projectId: project.id } } },
+    });
+    expect(versions).toHaveLength(0);
+  });
 });

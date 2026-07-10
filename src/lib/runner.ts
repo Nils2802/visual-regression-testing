@@ -14,16 +14,19 @@ export async function executeRun(runId: string, browser: Browser): Promise<void>
       environment: true,
     },
   });
-  const referenceEnv = run.referenceEnvironmentId
-    ? await prisma.environment.findUniqueOrThrow({ where: { id: run.referenceEnvironmentId } })
-    : null;
-
   await prisma.run.update({
     where: { id: runId },
     data: { status: 'running', startedAt: new Date() },
   });
 
   try {
+    const referenceEnv = run.referenceEnvironmentId
+      ? await prisma.environment.findUniqueOrThrow({ where: { id: run.referenceEnvironmentId } })
+      : null;
+    if (run.type === 'compare' && !referenceEnv) {
+      throw new Error('compare run requires a reference environment');
+    }
+
     const selected: string[] = JSON.parse(run.viewportIds);
     const viewports = run.project.viewports.filter(
       (v) => selected.length === 0 || selected.includes(v.id)
@@ -112,7 +115,11 @@ async function processResult(browser: Browser, job: ResultJob): Promise<void> {
   let baselinePng: Buffer | null = null;
   let referencePath: string | null = null;
 
-  if (job.runType === 'compare' && job.referenceUrl) {
+  if (job.runType === 'compare') {
+    if (!job.referenceUrl) {
+      // never fall through to visual-run/new-baseline logic for compare runs
+      throw new Error('compare run requires a reference environment');
+    }
     const reference = await capturePage(browser, {
       url: job.referenceUrl,
       viewport: job.viewport,
