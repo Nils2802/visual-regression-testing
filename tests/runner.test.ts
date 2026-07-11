@@ -48,12 +48,9 @@ async function seed(pagePath = '/', baselineOverrides: Record<string, unknown> =
   return { project, env, viewport, baseline };
 }
 
-// Scoped to one baseline's targets — the existing tests in this file use an
-// unscoped `baselineVersion.updateMany` to approve the version they just
-// created, which works only because it happens to run before any other
-// baseline in the shared test.db has pending versions. New tests append
-// more baselines to that same db, so approvals here are deliberately scoped
-// to avoid flipping unrelated baselines' pending versions to approved.
+// Scoped to one baseline's targets — approvals must never use an unscoped
+// `baselineVersion.updateMany`, which would flip unrelated baselines' pending
+// versions to approved in the shared test.db as other tests append baselines.
 async function approveVersionsFor(baselineId: string) {
   await prisma.baselineVersion.updateMany({
     where: { target: { baselineId } },
@@ -80,12 +77,12 @@ describe('executeRun — visual', () => {
   });
 
   it('second run against approved baseline of same page → pass', async () => {
-    const { project, env } = await seed();
+    const { project, env, baseline } = await seed();
     const run1 = await prisma.run.create({
       data: { projectId: project.id, environmentId: env.id, type: 'visual', trigger: 'manual' },
     });
     await executeRun(run1.id, browser);
-    await prisma.baselineVersion.updateMany({ data: { status: 'approved', isActive: true } });
+    await approveVersionsFor(baseline.id);
 
     const run2 = await prisma.run.create({
       data: { projectId: project.id, environmentId: env.id, type: 'visual', trigger: 'manual' },
@@ -264,17 +261,24 @@ describe('executeRun — compare', () => {
     expect(versions).toHaveLength(0);
   });
 
-  it('referenceEnvironmentId pointing at missing environment → run failed, not stuck at queued', async () => {
+  it('reference environment deleted before execution → run failed, not stuck at queued', async () => {
+    // The FK on referenceEnvironmentId (onDelete: SetNull) makes a dangling id
+    // impossible to create; the missing-reference case now arises when the
+    // environment is deleted between run creation and execution.
     const { project, env } = await seed();
+    const refEnv = await prisma.environment.create({
+      data: { projectId: project.id, name: 'doomed', baseUrl: server.url },
+    });
     const run = await prisma.run.create({
       data: {
         projectId: project.id,
         environmentId: env.id,
-        referenceEnvironmentId: 'nonexistent-env-id',
+        referenceEnvironmentId: refEnv.id,
         type: 'compare',
         trigger: 'manual',
       },
     });
+    await prisma.environment.delete({ where: { id: refEnv.id } });
     await executeRun(run.id, browser);
 
     const done = await prisma.run.findUniqueOrThrow({ where: { id: run.id } });
@@ -330,8 +334,10 @@ describe('executeRun — compare', () => {
 
       const refEntries = result.logEntries.filter((e) => e.origin === 'reference');
       expect(refEntries.length).toBeGreaterThan(0);
-      expect(refEntries.some((e) => e.type === 'console-error')).toBe(true);
-      expect(refEntries.every((e) => e.ignored)).toBe(true);
+      const refConsoleError = refEntries.find((e) => e.type === 'console-error');
+      expect(refConsoleError).toBeDefined();
+      expect(refConsoleError?.origin).toBe('reference');
+      expect(refConsoleError?.ignored).toBe(false);
 
       const testEntries = result.logEntries.filter((e) => e.origin === 'test');
       expect(testEntries).toHaveLength(0);

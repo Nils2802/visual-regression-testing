@@ -181,7 +181,7 @@ async function persistEntries(
       url: e.url,
       httpStatus: e.httpStatus,
       stack: e.stack,
-      ignored: origin === 'reference' ? true : e.ignored,
+      ignored: e.ignored,
       ignoreRuleId: e.ignoreRuleId,
       timestamp: e.timestamp,
     })),

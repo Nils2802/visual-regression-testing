@@ -26,12 +26,13 @@ model Project {
 }
 
 model Environment {
-  id        String  @id @default(cuid())
-  projectId String
-  name      String
-  baseUrl   String
-  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  runs      Run[]   @relation("testEnv")
+  id            String  @id @default(cuid())
+  projectId     String
+  name          String
+  baseUrl       String
+  project       Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  runs          Run[]   @relation("testEnv")
+  referenceRuns Run[]   @relation("referenceEnv")
 }
 
 model Viewport {
@@ -89,6 +90,7 @@ model Run {
   projectId              String
   environmentId          String
   referenceEnvironmentId String? // compare runs only
+  referenceEnvironment   Environment? @relation("referenceEnv", fields: [referenceEnvironmentId], references: [id], onDelete: SetNull)
   type                   String        @default("visual") // visual | compare | crawl
   trigger                String // manual | schedule | api
   status                 String        @default("queued") // queued | running | done | failed
