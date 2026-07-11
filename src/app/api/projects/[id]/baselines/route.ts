@@ -27,7 +27,7 @@ export async function POST(
 
   const { viewportIds, maskSelectors, ...fields } = body.data;
   const projectViewportIds = project.viewports.map((v) => v.id);
-  const selected = viewportIds ?? projectViewportIds;
+  const selected = [...new Set(viewportIds ?? projectViewportIds)];
   const unknown = selected.filter((v) => !projectViewportIds.includes(v));
   if (unknown.length > 0) return jsonError(400, `unknown viewport ids: ${unknown.join(', ')}`);
   const baseline = await prisma.baseline.create({
