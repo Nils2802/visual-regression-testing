@@ -1,9 +1,11 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
+import { chromium } from 'playwright';
 import { prisma } from '@/lib/db';
 import { startRun } from '@/lib/run-service';
-import { closeBrowser } from '@/lib/browser';
+import { getBrowser, closeBrowser } from '@/lib/browser';
+import { enqueue } from '@/lib/queue';
 import { startFixtureServer, FixtureServer } from './fixtures/server';
-import { POST as triggerRoute } from '@/app/api/projects/[id]/runs/route';
+import { POST as triggerRoute, GET as listRoute } from '@/app/api/projects/[id]/runs/route';
 import { GET as runDetailRoute } from '@/app/api/runs/[id]/route';
 
 let server: FixtureServer;
@@ -113,6 +115,24 @@ describe('runs API', () => {
     expect(detail.results[0].viewport.name).toBe('desktop');
   });
 
+  it('list route returns runs newest-first with result counts', async () => {
+    const res = await listRoute(new Request('http://t'), ctx(projectId));
+    expect(res.status).toBe(200);
+    const { runs } = await res.json();
+    expect(runs.length).toBeGreaterThanOrEqual(2); // startRun test + trigger route test
+
+    const times = runs.map((r: { createdAt: string }) => new Date(r.createdAt).getTime());
+    expect([...times].sort((a, b) => b - a)).toEqual(times); // newest-first
+
+    const done = runs.find((r: { status: string }) => r.status === 'done');
+    expect(done).toBeDefined();
+    expect(done.environment).toEqual({ id: environmentId, name: 'test' });
+    expect(done.resultCount).toBe(1);
+    expect(done.failedResultCount).toBe(0); // visualStatus 'new' is not a failure
+
+    expect((await listRoute(new Request('http://t'), ctx('nope'))).status).toBe(404);
+  });
+
   it('trigger route 400s bad bodies and 404s unknown projects/runs', async () => {
     expect(
       (await triggerRoute(new Request('http://t', { method: 'POST', body: '{}' }), ctx(projectId))).status
@@ -126,5 +146,70 @@ describe('runs API', () => {
       ).status
     ).toBe(404);
     expect((await runDetailRoute(new Request('http://t'), ctx('nope'))).status).toBe(404);
+  });
+});
+
+describe('pre-execution failure handling', () => {
+  it('recovers the browser singleton after a failed launch', async () => {
+    await closeBrowser();
+    const launchSpy = vi
+      .spyOn(chromium, 'launch')
+      .mockRejectedValueOnce(new Error('launch boom'));
+    try {
+      await expect(getBrowser()).rejects.toThrow('launch boom');
+      // The failed launch must not be cached: the next call relaunches for real.
+      const browser = await getBrowser();
+      expect(browser.isConnected()).toBe(true);
+    } finally {
+      launchSpy.mockRestore();
+    }
+  });
+
+  it('marks the run failed and logs when the browser cannot launch', async () => {
+    await closeBrowser();
+    const launchSpy = vi
+      .spyOn(chromium, 'launch')
+      .mockRejectedValueOnce(new Error('no browser for you'));
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const run = await startRun({ projectId, environmentId });
+      expect(run.status).toBe('queued');
+
+      expect(await waitForTerminal(run.id)).toBe('failed');
+      const failed = await prisma.run.findUniqueOrThrow({ where: { id: run.id } });
+      expect(failed.error).toBe('no browser for you');
+      expect(failed.finishedAt).not.toBeNull();
+      expect(
+        errorSpy.mock.calls.some((args) => String(args[0]).includes(run.id))
+      ).toBe(true);
+    } finally {
+      launchSpy.mockRestore();
+      errorSpy.mockRestore();
+    }
+  });
+
+  it('logs (without crashing) when the run row vanishes before the job starts', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      let release!: () => void;
+      const gate = new Promise<void>((r) => (release = r));
+      void enqueue(() => gate); // hold the FIFO queue
+
+      const run = await startRun({ projectId, environmentId });
+      await prisma.run.delete({ where: { id: run.id } });
+      release();
+      await enqueue(async () => {}); // drain: resolves after the doomed job settled
+
+      // The catch handler runs asynchronously after the job rejects; poll briefly.
+      for (let i = 0; i < 40; i++) {
+        if (errorSpy.mock.calls.some((args) => String(args[0]).includes(run.id))) break;
+        await new Promise((r) => setTimeout(r, 50));
+      }
+      expect(
+        errorSpy.mock.calls.some((args) => String(args[0]).includes(run.id))
+      ).toBe(true);
+    } finally {
+      errorSpy.mockRestore();
+    }
   });
 });

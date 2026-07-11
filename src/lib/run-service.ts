@@ -52,10 +52,23 @@ export async function startRun(input: StartRunInput): Promise<Run> {
     },
   });
 
-  // Fire and forget: executeRun marks the run failed on its own errors; the
-  // catch below only covers enqueue-level failures (e.g. run row deleted
-  // before the job starts), which must not surface as unhandled rejections.
-  void enqueue(async () => executeRun(run.id, await getBrowser())).catch(() => {});
+  // Fire and forget: executeRun marks the run failed on its own errors. The
+  // catch below covers failures BEFORE executeRun takes over (browser launch
+  // failure, run row deleted before the job starts): log them and mark the
+  // run failed if it is still non-terminal, so it never sits at `queued`.
+  void enqueue(async () => executeRun(run.id, await getBrowser())).catch(async (err) => {
+    console.error(`run ${run.id} failed before execution:`, err);
+    await prisma.run
+      .updateMany({
+        where: { id: run.id, status: { in: ['queued', 'running'] } },
+        data: {
+          status: 'failed',
+          finishedAt: new Date(),
+          error: err instanceof Error ? err.message : String(err),
+        },
+      })
+      .catch(() => {});
+  });
 
   return run;
 }
