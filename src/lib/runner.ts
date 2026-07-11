@@ -1,5 +1,6 @@
 import type { Browser } from 'playwright';
 import { prisma } from './db';
+import { emitRunEvent } from './events';
 import { capturePage } from './capture';
 import { diffImages } from './diff';
 import { saveImage, loadImage } from './storage';
@@ -19,6 +20,7 @@ export async function executeRun(runId: string, browser: Browser): Promise<void>
       where: { id: runId },
       data: { status: 'running', startedAt: new Date() },
     });
+    emitRunEvent(runId, { type: 'status', status: 'running' });
 
     const referenceEnv = run.referenceEnvironmentId
       ? await prisma.environment.findUniqueOrThrow({ where: { id: run.referenceEnvironmentId } })
@@ -66,6 +68,16 @@ export async function executeRun(runId: string, browser: Browser): Promise<void>
             data: { visualStatus: 'fail', error: err instanceof Error ? err.message : String(err) },
           });
         }
+
+        const finished = await prisma.runResult.findUniqueOrThrow({ where: { id: result.id } });
+        emitRunEvent(runId, {
+          type: 'result',
+          resultId: finished.id,
+          baselineId: finished.baselineId,
+          viewportId: finished.viewportId,
+          visualStatus: finished.visualStatus,
+          functionalStatus: finished.functionalStatus,
+        });
       }
     }
 
@@ -73,6 +85,7 @@ export async function executeRun(runId: string, browser: Browser): Promise<void>
       where: { id: runId },
       data: { status: 'done', finishedAt: new Date() },
     });
+    emitRunEvent(runId, { type: 'status', status: 'done' });
   } catch (err) {
     await prisma.run.update({
       where: { id: runId },
@@ -81,6 +94,11 @@ export async function executeRun(runId: string, browser: Browser): Promise<void>
         finishedAt: new Date(),
         error: err instanceof Error ? err.message : String(err),
       },
+    });
+    emitRunEvent(runId, {
+      type: 'status',
+      status: 'failed',
+      error: err instanceof Error ? err.message : String(err),
     });
   }
 }
