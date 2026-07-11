@@ -4,6 +4,8 @@ import { prisma } from '@/lib/db';
 import { saveImage, loadImage } from '@/lib/storage';
 import { approveVersion, rejectVersion, promoteResult } from '@/lib/approval';
 import { POST as approveRoute } from '@/app/api/versions/[id]/approve/route';
+import { POST as rejectRoute } from '@/app/api/versions/[id]/reject/route';
+import { POST as promoteRoute } from '@/app/api/results/[id]/promote/route';
 import { GET as pendingRoute } from '@/app/api/pending-versions/route';
 
 let targetId: string;
@@ -11,13 +13,52 @@ let projectId: string;
 
 const ctx = (id: string) => ({ params: Promise.resolve({ id }) });
 
-async function makePendingVersion(): Promise<string> {
+async function makePendingVersionFor(tid: string): Promise<string> {
   const png = PNG.sync.write(new PNG({ width: 3, height: 3 }));
   const imagePath = await saveImage('baselines', `appr-${Date.now()}-${Math.random()}`, png);
   const v = await prisma.baselineVersion.create({
-    data: { targetId, imagePath, status: 'pending' },
+    data: { targetId: tid, imagePath, status: 'pending' },
   });
   return v.id;
+}
+
+const makePendingVersion = () => makePendingVersionFor(targetId);
+
+async function makeFreshTarget(name: string): Promise<string> {
+  const viewport = await prisma.viewport.findFirstOrThrow({ where: { projectId } });
+  const baseline = await prisma.baseline.create({
+    data: {
+      projectId,
+      name,
+      pagePath: `/${name}`,
+      sourceType: 'capture',
+      targets: { create: [{ viewportId: viewport.id }] },
+    },
+    include: { targets: true },
+  });
+  return baseline.targets[0].id;
+}
+
+async function makeVisualResult(): Promise<{ resultId: string; capturePath: string }> {
+  const target = await prisma.baselineTarget.findUniqueOrThrow({ where: { id: targetId } });
+  const env = await prisma.environment.create({
+    data: { projectId, name: `env-${Math.random()}`, baseUrl: 'http://127.0.0.1:1' },
+  });
+  const run = await prisma.run.create({
+    data: { projectId, environmentId: env.id, trigger: 'manual', type: 'visual' },
+  });
+  const capturePng = PNG.sync.write(new PNG({ width: 4, height: 4 }));
+  const capturePath = await saveImage('captures', `route-${Date.now()}-${Math.random()}`, capturePng);
+  const result = await prisma.runResult.create({
+    data: {
+      runId: run.id,
+      baselineId: target.baselineId,
+      viewportId: target.viewportId,
+      captureImagePath: capturePath,
+      visualStatus: 'diff',
+    },
+  });
+  return { resultId: result.id, capturePath };
 }
 
 beforeAll(async () => {
@@ -63,6 +104,23 @@ describe('approveVersion', () => {
     const id = await makePendingVersion();
     await approveVersion(id);
     await expect(approveVersion(id)).rejects.toThrow('only pending versions can be approved');
+  });
+
+  it('concurrent approvals on the same target leave exactly one active version', async () => {
+    // Pins the invariant under the concurrency our stack actually allows:
+    // SQLite serializes write transactions, so whichever call wins last,
+    // exactly one isActive=true row must remain for the target.
+    const freshTarget = await makeFreshTarget(`race-${Date.now()}-${Math.random()}`);
+    const a = await makePendingVersionFor(freshTarget);
+    const b = await makePendingVersionFor(freshTarget);
+
+    await Promise.all([approveVersion(a), approveVersion(b)]);
+
+    const active = await prisma.baselineVersion.findMany({
+      where: { targetId: freshTarget, isActive: true },
+    });
+    expect(active).toHaveLength(1);
+    expect([a, b]).toContain(active[0].id);
   });
 });
 
@@ -139,6 +197,55 @@ describe('routes', () => {
     await rejectVersion(id);
     expect((await approveRoute(new Request('http://t'), ctx(id))).status).toBe(409);
     expect((await approveRoute(new Request('http://t'), ctx('nope'))).status).toBe(404);
+  });
+
+  it('reject route: 200 happy path, 409 already-rejected, 404 unknown', async () => {
+    const id = await makePendingVersion();
+    const ok = await rejectRoute(new Request('http://t'), ctx(id));
+    expect(ok.status).toBe(200);
+    const body = await ok.json();
+    expect(body.status).toBe('rejected');
+    expect(body.isActive).toBe(false);
+
+    expect((await rejectRoute(new Request('http://t'), ctx(id))).status).toBe(409);
+    expect((await rejectRoute(new Request('http://t'), ctx('nope'))).status).toBe(404);
+  });
+
+  it('promote route: 201 happy path with pending version on baselines/ path', async () => {
+    const { resultId, capturePath } = await makeVisualResult();
+    const res = await promoteRoute(new Request('http://t'), ctx(resultId));
+    expect(res.status).toBe(201);
+    const body = await res.json();
+    expect(body.status).toBe('pending');
+    expect(body.targetId).toBe(targetId);
+    expect(body.imagePath).toMatch(/^baselines\//);
+    expect(body.imagePath).not.toBe(capturePath);
+  });
+
+  it('promote route: 409 for compare-run result, 404 for unknown result', async () => {
+    const env = await prisma.environment.create({
+      data: { projectId, name: `cmp-${Math.random()}`, baseUrl: 'http://127.0.0.1:1' },
+    });
+    const run = await prisma.run.create({
+      data: {
+        projectId,
+        environmentId: env.id,
+        referenceEnvironmentId: env.id,
+        trigger: 'manual',
+        type: 'compare',
+      },
+    });
+    const target = await prisma.baselineTarget.findUniqueOrThrow({ where: { id: targetId } });
+    const result = await prisma.runResult.create({
+      data: {
+        runId: run.id,
+        baselineId: target.baselineId,
+        viewportId: target.viewportId,
+        captureImagePath: 'captures/whatever.png',
+      },
+    });
+    expect((await promoteRoute(new Request('http://t'), ctx(result.id))).status).toBe(409);
+    expect((await promoteRoute(new Request('http://t'), ctx('nope'))).status).toBe(404);
   });
 
   it('pending-versions lists cross-project queue with baseline and viewport context', async () => {
