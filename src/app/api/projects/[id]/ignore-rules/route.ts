@@ -1,16 +1,9 @@
 import { z } from 'zod';
 import { prisma } from '@/lib/db';
 import { jsonError, readJson } from '@/lib/api';
+import { LOG_TYPES } from '@/lib/collector';
 
 type Ctx = { params: Promise<{ id: string }> };
-
-const LOG_TYPES = [
-  'console-error',
-  'console-warning',
-  'page-error',
-  'http-error',
-  'network-error',
-] as const;
 
 function validRegex(pattern: string): boolean {
   try {

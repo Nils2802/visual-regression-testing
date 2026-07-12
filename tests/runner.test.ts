@@ -345,4 +345,44 @@ describe('executeRun — compare', () => {
       await noisyServer.close();
     }
   });
+
+  it('an ignore rule matching a REFERENCE-only console error flags that entry, but still never affects functionalStatus', async () => {
+    const { project, env } = await seed('/');
+    const noisyServer = await startFixtureServer({ '/': NOISY_PAGE });
+    try {
+      const refEnv = await prisma.environment.create({
+        data: { projectId: project.id, name: 'live-noisy-rule', baseUrl: noisyServer.url },
+      });
+      const rule = await prisma.ignoreRule.create({
+        data: { projectId: project.id, messagePattern: 'kaboom', reason: 'known ref noise' },
+      });
+      const run = await prisma.run.create({
+        data: {
+          projectId: project.id,
+          environmentId: env.id,
+          referenceEnvironmentId: refEnv.id,
+          type: 'compare',
+          trigger: 'manual',
+        },
+      });
+      await executeRun(run.id, browser);
+
+      const result = await prisma.runResult.findFirstOrThrow({
+        where: { runId: run.id },
+        include: { logEntries: true },
+      });
+      // Reference-only noise, even when a rule matches it, must never flip
+      // functionalStatus — that's computed strictly from test-page entries.
+      expect(result.functionalStatus).toBe('pass');
+
+      const refConsoleError = result.logEntries.find(
+        (e) => e.origin === 'reference' && e.type === 'console-error'
+      );
+      expect(refConsoleError).toBeDefined();
+      expect(refConsoleError?.ignored).toBe(true);
+      expect(refConsoleError?.ignoreRuleId).toBe(rule.id);
+    } finally {
+      await noisyServer.close();
+    }
+  });
 });

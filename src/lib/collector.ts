@@ -1,11 +1,14 @@
 import type { Page } from 'playwright';
 
-export type LogEntryType =
-  | 'console-error'
-  | 'console-warning'
-  | 'page-error'
-  | 'http-error'
-  | 'network-error';
+export const LOG_TYPES = [
+  'console-error',
+  'console-warning',
+  'page-error',
+  'http-error',
+  'network-error',
+] as const;
+
+export type LogEntryType = (typeof LOG_TYPES)[number];
 
 export interface CollectedEntry {
   type: LogEntryType;

@@ -5,7 +5,6 @@ import { capturePage } from './capture';
 import { diffImages } from './diff';
 import { saveImage, loadImage } from './storage';
 import { applyIgnoreRules, functionalStatus, IgnoreRuleInput, JudgedEntry } from './ignore';
-import type { CollectedEntry } from './collector';
 
 export async function executeRun(runId: string, browser: Browser): Promise<void> {
   const run = await prisma.run.findUniqueOrThrow({
@@ -151,10 +150,9 @@ async function processResult(browser: Browser, job: ResultJob): Promise<void> {
       maskSelectors: job.maskSelectors,
     });
     referencePath = await saveImage('references', job.resultId, reference.png);
-    const refJudged: JudgedEntry[] = reference.entries.map((e: CollectedEntry) => ({
-      ...e,
-      ignored: false,
-    }));
+    // Reference entries get rule-matching too (ignored/ignoreRuleId), but never
+    // feed functionalStatus — that's computed from the test-page entries above.
+    const refJudged: JudgedEntry[] = applyIgnoreRules(reference.entries, job.rules);
     await persistEntries(job.resultId, refJudged, 'reference');
     baselinePng = reference.png;
   } else if (job.activeBaselinePath) {

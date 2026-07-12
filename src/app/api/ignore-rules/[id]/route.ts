@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { prisma } from '@/lib/db';
 import { jsonError, readJson } from '@/lib/api';
+import { LOG_TYPES } from '@/lib/collector';
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -15,10 +16,7 @@ function validRegex(pattern: string): boolean {
 
 const patchSchema = z.object({
   reason: z.string().min(1).optional(),
-  entryType: z
-    .enum(['console-error', 'console-warning', 'page-error', 'http-error', 'network-error'])
-    .nullable()
-    .optional(),
+  entryType: z.enum(LOG_TYPES).nullable().optional(),
   urlPattern: z.string().min(1).refine(validRegex, 'invalid regex').nullable().optional(),
   messagePattern: z.string().min(1).refine(validRegex, 'invalid regex').nullable().optional(),
 });
