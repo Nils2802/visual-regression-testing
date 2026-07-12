@@ -146,6 +146,45 @@ describe('SSE route', () => {
     expect((await sseRoute(new Request('http://t'), ctx('nope'))).status).toBe(404);
   });
 
+  it('already-terminal run at connect time: snapshot replays terminal status and closes immediately', async () => {
+    const run = await prisma.run.create({
+      data: {
+        projectId,
+        environmentId,
+        type: 'visual',
+        trigger: 'manual',
+        status: 'done',
+        startedAt: new Date(),
+        finishedAt: new Date(),
+      },
+    });
+    const res = await sseRoute(new Request('http://t'), ctx(run.id));
+    const text = await res.text();
+    const events = text
+      .split('\n\n')
+      .filter((chunk) => chunk.startsWith('data: '))
+      .map((chunk) => JSON.parse(chunk.slice('data: '.length)) as RunEvent);
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({ type: 'status', status: 'done' });
+  });
+
+  it('connecting only after the run has already reached terminal (via DB polling) still closes with the terminal event', async () => {
+    // Pins the after-subscribe re-fetch: by the time we connect, the run's
+    // one-shot terminal emit already happened and the bus will deliver
+    // nothing new for this runId, so the only way to observe 'done' is the
+    // findUniqueOrThrow performed inside start() after onRunEvent subscribes.
+    const run = await startRun({ projectId, environmentId });
+    await waitForTerminal(run.id);
+
+    const res = await sseRoute(new Request('http://t'), ctx(run.id));
+    const text = await res.text();
+    const events = text
+      .split('\n\n')
+      .filter((chunk) => chunk.startsWith('data: '))
+      .map((chunk) => JSON.parse(chunk.slice('data: '.length)) as RunEvent);
+    expect(events.at(-1)).toMatchObject({ type: 'status', status: 'done' });
+  });
+
   it('client abort unsubscribes the bus listener', async () => {
     const run = await startRun({ projectId, environmentId });
     const ac = new AbortController();
@@ -156,6 +195,20 @@ describe('SSE route', () => {
     expect(runEventListenerCount(run.id)).toBe(0);
     await res.body?.cancel();
     // let the background run finish so afterAll's closeBrowser doesn't interrupt it
+    await waitForTerminal(run.id);
+  });
+
+  it('runtime-driven stream cancellation (client disconnect) cleans up without throwing', async () => {
+    const run = await startRun({ projectId, environmentId });
+    const res = await sseRoute(new Request('http://t'), ctx(run.id));
+    expect(runEventListenerCount(run.id)).toBe(1);
+
+    // Simulate the runtime cancelling the stream (e.g. tab closed) directly,
+    // without going through req.signal — this exercises the ReadableStream
+    // source's cancel() hook rather than the abort-listener path above.
+    await expect(res.body!.cancel()).resolves.toBeUndefined();
+    expect(runEventListenerCount(run.id)).toBe(0);
+
     await waitForTerminal(run.id);
   });
 });
