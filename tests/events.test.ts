@@ -1,6 +1,6 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { prisma } from '@/lib/db';
-import { emitRunEvent, onRunEvent, type RunEvent } from '@/lib/events';
+import { emitRunEvent, onRunEvent, runEventListenerCount, type RunEvent } from '@/lib/events';
 import { startRun } from '@/lib/run-service';
 import { closeBrowser } from '@/lib/browser';
 import { startFixtureServer, FixtureServer } from './fixtures/server';
@@ -11,6 +11,15 @@ let projectId: string;
 let environmentId: string;
 
 const ctx = (id: string) => ({ params: Promise.resolve({ id }) });
+
+async function waitForTerminal(runId: string) {
+  for (let i = 0; i < 120; i++) {
+    const run = await prisma.run.findUniqueOrThrow({ where: { id: runId } });
+    if (run.status === 'done' || run.status === 'failed') return run;
+    await new Promise((r) => setTimeout(r, 250));
+  }
+  throw new Error(`run ${runId} did not reach a terminal status in time`);
+}
 
 beforeAll(async () => {
   server = await startFixtureServer({ '/': '<html><body>events page</body></html>' });
@@ -59,6 +68,21 @@ describe('event bus', () => {
     expect(seen).toHaveLength(0);
     off();
   });
+
+  it('a throwing subscriber does not block other subscribers or the emitter', () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const seen: RunEvent[] = [];
+    const offBad = onRunEvent('boom-run', () => {
+      throw new Error('subscriber boom');
+    });
+    const offGood = onRunEvent('boom-run', (e) => seen.push(e));
+    expect(() => emitRunEvent('boom-run', { type: 'status', status: 'running' })).not.toThrow();
+    expect(seen).toEqual([{ type: 'status', status: 'running' }]);
+    expect(errorSpy).toHaveBeenCalled();
+    offBad();
+    offGood();
+    errorSpy.mockRestore();
+  });
 });
 
 describe('runner emission', () => {
@@ -75,6 +99,31 @@ describe('runner emission', () => {
     expect(result).toBeDefined();
     if (result && result.type === 'result') expect(result.visualStatus).toBe('new');
     expect(events.at(-1)).toEqual({ type: 'status', status: 'done' });
+  });
+
+  it('a throwing subscriber never affects the run outcome', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const run = await startRun({ projectId, environmentId });
+    const offBad = onRunEvent(run.id, () => {
+      throw new Error('subscriber boom');
+    });
+    const events: RunEvent[] = [];
+    const off = onRunEvent(run.id, (e) => events.push(e));
+    for (let i = 0; i < 120 && !events.some((e) => e.type === 'status' && e.status !== 'running'); i++) {
+      await new Promise((r) => setTimeout(r, 250));
+    }
+    offBad();
+    off();
+    errorSpy.mockRestore();
+    const finished = await prisma.run.findUniqueOrThrow({ where: { id: run.id } });
+    expect(finished.status).toBe('done');
+    expect(finished.error).toBeNull();
+    const results = await prisma.runResult.findMany({ where: { runId: run.id } });
+    expect(results).toHaveLength(1);
+    // exactly one terminal status event, despite the throwing subscriber
+    expect(events.filter((e) => e.type === 'status' && e.status !== 'running')).toEqual([
+      { type: 'status', status: 'done' },
+    ]);
   });
 });
 
@@ -95,5 +144,18 @@ describe('SSE route', () => {
 
   it('404s for an unknown run', async () => {
     expect((await sseRoute(new Request('http://t'), ctx('nope'))).status).toBe(404);
+  });
+
+  it('client abort unsubscribes the bus listener', async () => {
+    const run = await startRun({ projectId, environmentId });
+    const ac = new AbortController();
+    const res = await sseRoute(new Request('http://t', { signal: ac.signal }), ctx(run.id));
+    // run is queued/running at connect time, so the stream stays subscribed
+    expect(runEventListenerCount(run.id)).toBe(1);
+    ac.abort();
+    expect(runEventListenerCount(run.id)).toBe(0);
+    await res.body?.cancel();
+    // let the background run finish so afterAll's closeBrowser doesn't interrupt it
+    await waitForTerminal(run.id);
   });
 });

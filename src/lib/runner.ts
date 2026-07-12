@@ -69,15 +69,21 @@ export async function executeRun(runId: string, browser: Browser): Promise<void>
           });
         }
 
-        const finished = await prisma.runResult.findUniqueOrThrow({ where: { id: result.id } });
-        emitRunEvent(runId, {
-          type: 'result',
-          resultId: finished.id,
-          baselineId: finished.baselineId,
-          viewportId: finished.viewportId,
-          visualStatus: finished.visualStatus,
-          functionalStatus: finished.functionalStatus,
-        });
+        // Progress emission must never affect the run outcome: a failure here
+        // (e.g. in the DB re-fetch) is logged, not propagated to the outer catch.
+        try {
+          const finished = await prisma.runResult.findUniqueOrThrow({ where: { id: result.id } });
+          emitRunEvent(runId, {
+            type: 'result',
+            resultId: finished.id,
+            baselineId: finished.baselineId,
+            viewportId: finished.viewportId,
+            visualStatus: finished.visualStatus,
+            functionalStatus: finished.functionalStatus,
+          });
+        } catch (err) {
+          console.error(`run ${runId}: result event emission failed:`, err);
+        }
       }
     }
 
