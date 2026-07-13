@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db';
 import { enqueue } from '@/lib/queue';
 import { executeRun } from '@/lib/runner';
 import { getBrowser } from '@/lib/browser';
+import { ApiError } from '@/lib/api-error';
 
 export interface StartRunInput {
   projectId: string;
@@ -18,28 +19,29 @@ export async function startRun(input: StartRunInput): Promise<Run> {
     where: { id: input.projectId },
     include: { viewports: { select: { id: true } } },
   });
-  if (!project) throw new Error('project not found');
+  if (!project) throw new ApiError(404, 'project not found');
 
   const environment = await prisma.environment.findUnique({ where: { id: input.environmentId } });
   if (!environment || environment.projectId !== project.id) {
-    throw new Error('environment does not belong to project');
+    throw new ApiError(400, 'environment does not belong to project');
   }
 
   const type = input.type ?? 'visual';
   if (type === 'compare') {
-    if (!input.referenceEnvironmentId) throw new Error('compare run requires referenceEnvironmentId');
+    if (!input.referenceEnvironmentId)
+      throw new ApiError(400, 'compare run requires referenceEnvironmentId');
     const reference = await prisma.environment.findUnique({
       where: { id: input.referenceEnvironmentId },
     });
     if (!reference || reference.projectId !== project.id) {
-      throw new Error('reference environment does not belong to project');
+      throw new ApiError(400, 'reference environment does not belong to project');
     }
   }
 
   const viewportIds = input.viewportIds ?? [];
   const known = project.viewports.map((v) => v.id);
   const unknown = viewportIds.filter((v) => !known.includes(v));
-  if (unknown.length > 0) throw new Error(`unknown viewport ids: ${unknown.join(', ')}`);
+  if (unknown.length > 0) throw new ApiError(400, `unknown viewport ids: ${unknown.join(', ')}`);
 
   const run = await prisma.run.create({
     data: {

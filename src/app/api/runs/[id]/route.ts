@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/db';
-import { jsonError } from '@/lib/api';
+import { jsonError, serializeRun } from '@/lib/api';
 
 export async function GET(
   _req: Request,
@@ -21,5 +21,5 @@ export async function GET(
     },
   });
   if (!run) return jsonError(404, 'run not found');
-  return Response.json(run);
+  return Response.json(serializeRun(run));
 }

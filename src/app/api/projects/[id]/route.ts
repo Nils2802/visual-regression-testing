@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { prisma } from '@/lib/db';
-import { jsonError, readJson } from '@/lib/api';
+import { jsonError, readJson, serializeBaseline } from '@/lib/api';
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -20,7 +20,7 @@ export async function GET(_req: Request, ctx: Ctx): Promise<Response> {
     },
   });
   if (!project) return jsonError(404, 'project not found');
-  return Response.json(project);
+  return Response.json({ ...project, baselines: project.baselines.map(serializeBaseline) });
 }
 
 export async function PATCH(req: Request, ctx: Ctx): Promise<Response> {

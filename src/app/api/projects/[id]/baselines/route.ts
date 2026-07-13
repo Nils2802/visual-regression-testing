@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { prisma } from '@/lib/db';
-import { jsonError, readJson } from '@/lib/api';
+import { jsonError, readJson, serializeBaseline } from '@/lib/api';
 
 const createSchema = z.object({
   name: z.string().min(1),
@@ -39,5 +39,5 @@ export async function POST(
     },
     include: { targets: true },
   });
-  return Response.json(baseline, { status: 201 });
+  return Response.json(serializeBaseline(baseline), { status: 201 });
 }

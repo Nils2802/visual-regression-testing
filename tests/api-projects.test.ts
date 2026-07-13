@@ -75,6 +75,9 @@ describe('projects API', () => {
     });
     expect(target).not.toBeNull();
 
+    const detail = await (await getProject(new Request('http://test.local'), ctx(p.id))).json();
+    expect(detail.baselines[0].maskSelectors).toEqual([]);
+
     expect((await deleteViewport(new Request('http://test.local'), ctx(vp.id))).status).toBe(204);
   });
 

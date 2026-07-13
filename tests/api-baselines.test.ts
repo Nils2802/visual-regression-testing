@@ -52,6 +52,7 @@ describe('baselines API', () => {
     expect(res.status).toBe(201);
     const baseline = await res.json();
     expect(baseline.targets).toHaveLength(2);
+    expect(baseline.maskSelectors).toEqual([]);
   });
 
   it('respects a viewport subset', async () => {
@@ -91,6 +92,7 @@ describe('baselines API', () => {
     const detail = await (await getBaseline(new Request('http://test.local'), ctx(baseline.id))).json();
     const target = detail.targets.find((t: { viewportId: string }) => t.viewportId === vpDesktop);
     expect(target.versions).toHaveLength(1);
+    expect(detail.maskSelectors).toEqual([]);
   });
 
   it('rejects non-PNG uploads with 400', async () => {
@@ -161,7 +163,7 @@ describe('baselines API', () => {
     expect(updated.diffThreshold).toBe(0.05);
     // omitted fields stay untouched
     expect(updated.elementSelector).toBe('#hero');
-    expect(updated.maskSelectors).toBe(JSON.stringify(['.ad']));
+    expect(updated.maskSelectors).toEqual(['.ad']);
     expect(updated.sourceType).toBe('capture');
   });
 
@@ -204,7 +206,7 @@ describe('baselines API', () => {
     );
     expect(res.status).toBe(200);
     const updated = await res.json();
-    expect(updated.maskSelectors).toBe(JSON.stringify(['.a', '.b']));
+    expect(updated.maskSelectors).toEqual(['.a', '.b']);
 
     const row = await prisma.baseline.findUniqueOrThrow({ where: { id: baseline.id } });
     expect(JSON.parse(row.maskSelectors)).toEqual(['.a', '.b']);

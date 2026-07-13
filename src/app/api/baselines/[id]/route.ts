@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { prisma } from '@/lib/db';
-import { jsonError, readJson } from '@/lib/api';
+import { jsonError, readJson, serializeBaseline } from '@/lib/api';
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -23,7 +23,7 @@ export async function GET(_req: Request, ctx: Ctx): Promise<Response> {
     },
   });
   if (!baseline) return jsonError(404, 'baseline not found');
-  return Response.json(baseline);
+  return Response.json(serializeBaseline(baseline));
 }
 
 export async function PATCH(req: Request, ctx: Ctx): Promise<Response> {
@@ -40,7 +40,7 @@ export async function PATCH(req: Request, ctx: Ctx): Promise<Response> {
       ...(maskSelectors !== undefined ? { maskSelectors: JSON.stringify(maskSelectors) } : {}),
     },
   });
-  return Response.json(baseline);
+  return Response.json(serializeBaseline(baseline));
 }
 
 export async function DELETE(_req: Request, ctx: Ctx): Promise<Response> {

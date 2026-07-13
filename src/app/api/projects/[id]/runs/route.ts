@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { prisma } from '@/lib/db';
-import { jsonError, readJson } from '@/lib/api';
+import { errorResponse, jsonError, readJson, serializeRun } from '@/lib/api';
 import { startRun } from '@/lib/run-service';
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -18,11 +18,9 @@ export async function POST(req: Request, ctx: Ctx): Promise<Response> {
   if (!body.ok) return body.res;
   try {
     const run = await startRun({ projectId: id, trigger: 'manual', ...body.data });
-    return Response.json(run, { status: 201 });
+    return Response.json(serializeRun(run), { status: 201 });
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    if (message === 'project not found') return jsonError(404, message);
-    return jsonError(400, message);
+    return errorResponse(err);
   }
 }
 
@@ -41,7 +39,7 @@ export async function GET(_req: Request, ctx: Ctx): Promise<Response> {
   });
   return Response.json({
     runs: runs.map(({ results, ...run }) => ({
-      ...run,
+      ...serializeRun(run),
       resultCount: results.length,
       failedResultCount: results.filter(
         (r) =>

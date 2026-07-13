@@ -106,6 +106,7 @@ describe('runs API', () => {
     );
     expect(res.status).toBe(201);
     const run = await res.json();
+    expect(run.viewportIds).toEqual([]);
     await waitForTerminal(run.id);
 
     const detail = await (await runDetailRoute(new Request('http://t'), ctx(run.id))).json();
@@ -113,6 +114,7 @@ describe('runs API', () => {
     expect(detail.results).toHaveLength(1);
     expect(detail.results[0].baseline.name).toBe('home');
     expect(detail.results[0].viewport.name).toBe('desktop');
+    expect(detail.viewportIds).toEqual([]);
   });
 
   it('list route returns runs newest-first with result counts', async () => {
@@ -129,6 +131,7 @@ describe('runs API', () => {
     expect(done.environment).toEqual({ id: environmentId, name: 'test' });
     expect(done.resultCount).toBe(1);
     expect(done.failedResultCount).toBe(0); // visualStatus 'new' is not a failure
+    expect(done.viewportIds).toEqual([]);
 
     expect((await listRoute(new Request('http://t'), ctx('nope'))).status).toBe(404);
   });
