@@ -3,9 +3,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { api, ApiClientError, imageUrl, runEventsUrl, type RunDetail, type Viewport } from '@/lib/client';
+import { api, ApiClientError, runEventsUrl, type RunDetail, type Viewport } from '@/lib/client';
 import { RunProgress } from '@/components/run-progress';
 import { ResultList, type StatusFilter } from '@/components/result-list';
+import { ComparisonViewer } from '@/components/comparison-viewer';
 
 export default function RunDetailPage() {
   const params = useParams<{ id: string }>();
@@ -115,15 +116,7 @@ export default function RunDetailPage() {
 
         <div className="flex flex-col gap-2">
           {selectedResult ? (
-            selectedResult.captureImagePath ? (
-              <img
-                src={imageUrl(selectedResult.captureImagePath)}
-                alt={`${selectedResult.baseline.name} capture`}
-                className="w-full rounded-md border border-border"
-              />
-            ) : (
-              <p className="text-sm text-muted">No capture available for this result.</p>
-            )
+            <ComparisonViewer key={selectedResult.id} result={selectedResult} runType={run.type} onPromoted={reload} />
           ) : (
             <p className="text-sm text-muted">Select a result to preview.</p>
           )}
