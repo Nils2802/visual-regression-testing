@@ -7,6 +7,7 @@ import { api, ApiClientError, runEventsUrl, type RunDetail, type Viewport } from
 import { RunProgress } from '@/components/run-progress';
 import { ResultList, type StatusFilter } from '@/components/result-list';
 import { ComparisonViewer } from '@/components/comparison-viewer';
+import { LogPanel } from '@/components/log-panel';
 
 export default function RunDetailPage() {
   const params = useParams<{ id: string }>();
@@ -114,9 +115,12 @@ export default function RunDetailPage() {
           viewports={viewports}
         />
 
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-4">
           {selectedResult ? (
-            <ComparisonViewer result={selectedResult} runType={run.type} onPromoted={reload} />
+            <>
+              <ComparisonViewer result={selectedResult} runType={run.type} onPromoted={reload} />
+              <LogPanel entries={selectedResult.logEntries} onIgnored={reload} />
+            </>
           ) : (
             <p className="text-sm text-muted">Select a result to preview.</p>
           )}
