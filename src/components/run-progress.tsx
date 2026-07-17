@@ -17,15 +17,26 @@ export function RunProgress({
     <div className="flex flex-col gap-2">
       <div className="flex items-center gap-2">
         <StatusBadge kind="run" value={run.status} />
-        {expectedCount !== null && (
-          <span className="font-mono text-xs text-muted">
-            {completedCount}/{expectedCount}
-          </span>
-        )}
+        <span className="font-mono text-xs text-muted">
+          {expectedCount !== null ? (
+            `${completedCount}/${expectedCount}`
+          ) : (
+            `${completedCount} result${completedCount === 1 ? '' : 's'}`
+          )}
+        </span>
       </div>
       {isActive && (
         <div className="h-1 w-full overflow-hidden rounded-full bg-surface-2">
-          <div className="h-full bg-accent transition-[width]" style={{ width: `${pct}%` }} />
+          {expectedCount !== null ? (
+            <div className="h-full bg-accent transition-[width]" style={{ width: `${pct}%` }} />
+          ) : (
+            // Total is unknown until the run is terminal (see page.tsx) — show
+            // an indeterminate pulse instead of a fake fractional width.
+            // `animate-pulse` is neutralized under prefers-reduced-motion by
+            // the global rule in globals.css (forces animation-duration to
+            // 0.01ms), so no extra guard is needed here.
+            <div className="h-full w-full bg-accent animate-pulse" data-testid="run-progress-indeterminate" />
+          )}
         </div>
       )}
     </div>

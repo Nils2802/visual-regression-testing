@@ -61,7 +61,12 @@ export default function RunDetailPage() {
     return [...map.values()];
   }, [run]);
 
-  const expectedCount = run && run.status !== 'queued' ? run.results.length : null;
+  // The true total is only known once the run reaches a terminal state: rows
+  // are created lazily, one per baseline×viewport pair immediately before it
+  // is processed (see runner.ts), so `results.length` while queued/running is
+  // just "how many have started so far" — not a valid denominator. Show it as
+  // an indeterminate count until then instead of a misleading N/N-ish ratio.
+  const expectedCount = run && (run.status === 'done' || run.status === 'failed') ? run.results.length : null;
   const completedCount = run ? run.results.filter((r) => r.visualStatus !== null).length : 0;
   const selectedResult = run?.results.find((r) => r.id === selectedId) ?? null;
 
