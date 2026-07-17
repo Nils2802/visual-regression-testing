@@ -38,7 +38,9 @@ export interface Environment { id: string; projectId: string; name: string; base
 export interface Viewport { id: string; projectId: string; name: string; width: number; height: number }
 export interface BaselineVersion { id: string; targetId: string; imagePath: string; status: string; isActive: boolean; createdAt: string }
 export interface BaselineTarget { id: string; baselineId: string; viewportId: string; viewport?: Viewport; versions?: BaselineVersion[] }
+export interface BaselineTargetDetail extends BaselineTarget { viewport: Viewport; versions: BaselineVersion[] }
 export interface Baseline { id: string; projectId: string; name: string; pagePath: string; elementSelector: string | null; diffThreshold: number | null; maskSelectors: string[]; sourceType: string; syncStatus: string; targets?: BaselineTarget[] }
+export interface BaselineDetail extends Baseline { targets: BaselineTargetDetail[] }
 export interface Project { id: string; name: string; diffThreshold: number; createdAt: string }
 export interface ProjectSummary extends Project { lastRun: { id: string; status: string; createdAt: string } | null; failedResultCount: number }
 export interface ProjectDetail extends Project { environments: Environment[]; viewports: Viewport[]; baselines: Baseline[] }
@@ -72,7 +74,7 @@ export const api = {
   },
   baselines: {
     create: (projectId: string, body: { name: string; pagePath: string; elementSelector?: string; diffThreshold?: number; maskSelectors?: string[]; sourceType: 'upload' | 'capture'; viewportIds?: string[] }) => request<Baseline>('POST', `/api/projects/${projectId}/baselines`, body),
-    get: (id: string) => request<Baseline>('GET', `/api/baselines/${id}`),
+    get: (id: string) => request<BaselineDetail>('GET', `/api/baselines/${id}`),
     update: (id: string, body: Partial<{ name: string; pagePath: string; elementSelector: string | null; diffThreshold: number | null; maskSelectors: string[] }>) => request<Baseline>('PATCH', `/api/baselines/${id}`, body),
     delete: (id: string) => request<undefined>('DELETE', `/api/baselines/${id}`),
     uploadVersion: (baselineId: string, viewportId: string, png: Uint8Array) => request<BaselineVersion>('POST', `/api/baselines/${baselineId}/targets/${viewportId}/versions`, png),
