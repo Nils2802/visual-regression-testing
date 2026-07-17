@@ -1,39 +1,40 @@
-'use client';
-
-import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { StatusBadge } from '@/components/status-badge';
 import type { RunSummary } from '@/lib/client';
 
 function RunRow({ run }: { run: RunSummary }) {
-  const router = useRouter();
   const href = `/runs/${run.id}`;
 
-  function navigate() {
-    router.push(href);
-  }
-
   return (
-    <TableRow
-      role="link"
-      tabIndex={0}
-      className="cursor-pointer"
-      onClick={navigate}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          navigate();
-        }
-      }}
-    >
-      <TableCell className="font-mono">{new Date(run.createdAt).toLocaleString()}</TableCell>
-      <TableCell>{run.type}</TableCell>
-      <TableCell>{run.environment.name}</TableCell>
-      <TableCell>
-        <StatusBadge kind="run" value={run.status} />
+    <TableRow>
+      <TableCell className="p-0">
+        <Link href={href} className="block px-2 py-2 font-mono">
+          {new Date(run.createdAt).toLocaleString()}
+        </Link>
       </TableCell>
-      <TableCell className={`font-mono ${run.failedResultCount > 0 ? 'text-status-fail' : ''}`}>
-        {run.failedResultCount}/{run.resultCount}
+      <TableCell className="p-0">
+        <Link href={href} className="block px-2 py-2">
+          {run.type}
+        </Link>
+      </TableCell>
+      <TableCell className="p-0">
+        <Link href={href} className="block px-2 py-2">
+          {run.environment.name}
+        </Link>
+      </TableCell>
+      <TableCell className="p-0">
+        <Link href={href} className="block px-2 py-2">
+          <StatusBadge kind="run" value={run.status} />
+        </Link>
+      </TableCell>
+      <TableCell className="p-0">
+        <Link
+          href={href}
+          className={`block px-2 py-2 font-mono ${run.failedResultCount > 0 ? 'text-status-fail' : ''}`}
+        >
+          {run.failedResultCount}/{run.resultCount}
+        </Link>
       </TableCell>
     </TableRow>
   );

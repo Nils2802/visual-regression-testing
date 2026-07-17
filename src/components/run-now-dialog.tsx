@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
-import { api, type ProjectDetail, type Run } from '@/lib/client';
+import { api, ApiClientError, type ProjectDetail, type Run } from '@/lib/client';
 
 export function RunNowDialog({
   project,
@@ -32,6 +32,7 @@ export function RunNowDialog({
   const [referenceEnvironmentId, setReferenceEnvironmentId] = useState('');
   const [viewportIds, setViewportIds] = useState<string[]>(project.viewports.map((v) => v.id));
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Reset the form each time the dialog opens, so a prior run's selections
   // don't leak into the next one.
@@ -42,6 +43,7 @@ export function RunNowDialog({
     setReferenceEnvironmentId('');
     setViewportIds(project.viewports.map((v) => v.id));
     setSubmitting(false);
+    setError(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 
@@ -59,6 +61,7 @@ export function RunNowDialog({
     if (!canSubmit) return;
     const allSelected = viewportIds.length === project.viewports.length;
     setSubmitting(true);
+    setError(null);
     triggerFn(project.id, {
       environmentId,
       type,
@@ -69,6 +72,7 @@ export function RunNowDialog({
         setOpen(false);
         onTriggered(run);
       })
+      .catch((err) => setError(err instanceof ApiClientError ? err.message : 'something went wrong'))
       .finally(() => setSubmitting(false));
   }
 
@@ -173,6 +177,8 @@ export function RunNowDialog({
               ))}
             </div>
           </div>
+
+          {error && <p className="text-sm text-status-fail">{error}</p>}
 
           <Button type="submit" disabled={!canSubmit || submitting}>
             Start run

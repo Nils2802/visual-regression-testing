@@ -22,16 +22,9 @@ export default function ProjectDetailPage() {
   const [editingBaseline, setEditingBaseline] = useState<Baseline | null>(null);
 
   const load = useCallback(() => {
-    api.projects
-      .get(projectId)
-      .then((p) => {
+    Promise.all([api.projects.get(projectId), api.runs.list(projectId)])
+      .then(([p, r]) => {
         setProject(p);
-        setError(null);
-      })
-      .catch((e) => setError(e instanceof ApiClientError ? e.message : 'failed to load'));
-    api.runs
-      .list(projectId)
-      .then((r) => {
         setRuns(r.runs);
         setError(null);
       })

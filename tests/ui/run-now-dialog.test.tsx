@@ -2,7 +2,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
 import { RunNowDialog } from '@/components/run-now-dialog';
-import type { ProjectDetail } from '@/lib/client';
+import { ApiClientError, type ProjectDetail } from '@/lib/client';
 
 afterEach(cleanup);
 
@@ -50,5 +50,14 @@ describe('RunNowDialog', () => {
     fireEvent.click(screen.getByText('Start run'));
     await waitFor(() => expect(trigger).toHaveBeenCalled());
     expect(trigger.mock.calls[0][1].viewportIds).toBeUndefined();
+  });
+
+  it('surfaces a trigger failure inline instead of swallowing it', async () => {
+    const trigger = vi.fn().mockRejectedValue(new ApiClientError(500, 'environment is unreachable'));
+    setup(trigger);
+    fireEvent.click(screen.getByLabelText('staging'));
+    fireEvent.click(screen.getByText('Start run'));
+    await waitFor(() => expect(trigger).toHaveBeenCalled());
+    expect(await screen.findByText('environment is unreachable')).toBeDefined();
   });
 });
