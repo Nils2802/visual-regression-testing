@@ -21,6 +21,7 @@ export default function ProjectSettingsPage() {
       .then(([p, r]) => {
         setProject(p);
         setRules(r.rules);
+        setError(null);
       })
       .catch((e) => setError(e instanceof ApiClientError ? e.message : 'failed to load'));
   }, [projectId]);
