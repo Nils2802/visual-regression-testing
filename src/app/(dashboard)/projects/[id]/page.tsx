@@ -2,17 +2,21 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
-import { api, ApiClientError, type Baseline, type ProjectDetail } from '@/lib/client';
+import { useParams, useRouter } from 'next/navigation';
+import { api, ApiClientError, type Baseline, type ProjectDetail, type RunSummary } from '@/lib/client';
 import { BaselineGrid } from '@/components/baseline-grid';
 import { BaselineDialog, type BaselineFormValues } from '@/components/baseline-dialog';
+import { RunNowDialog } from '@/components/run-now-dialog';
+import { RunsList } from '@/components/runs-list';
 import { Button } from '@/components/ui/button';
 
 export default function ProjectDetailPage() {
   const params = useParams<{ id: string }>();
   const projectId = params.id;
+  const router = useRouter();
 
   const [project, setProject] = useState<ProjectDetail | null>(null);
+  const [runs, setRuns] = useState<RunSummary[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [editingBaseline, setEditingBaseline] = useState<Baseline | null>(null);
@@ -22,6 +26,13 @@ export default function ProjectDetailPage() {
       .get(projectId)
       .then((p) => {
         setProject(p);
+        setError(null);
+      })
+      .catch((e) => setError(e instanceof ApiClientError ? e.message : 'failed to load'));
+    api.runs
+      .list(projectId)
+      .then((r) => {
+        setRuns(r.runs);
         setError(null);
       })
       .catch((e) => setError(e instanceof ApiClientError ? e.message : 'failed to load'));
@@ -84,7 +95,11 @@ export default function ProjectDetailPage() {
       <div className="flex items-center justify-between gap-2">
         <h1 className="font-display text-2xl font-semibold tracking-tight">{project.name}</h1>
         <div className="flex items-center gap-2">
-          {/* Task 7: RunNowDialog mounts here */}
+          <RunNowDialog
+            project={project}
+            onTriggered={(run) => router.push('/runs/' + run.id)}
+            trigger={<Button variant="outline">Run now</Button>}
+          />
           <Link href={`/projects/${project.id}/settings`}>
             <Button variant="outline">Settings</Button>
           </Link>
@@ -121,6 +136,11 @@ export default function ProjectDetailPage() {
         }}
         onSubmit={updateBaseline}
       />
+
+      <div className="flex flex-col gap-3">
+        <h2 className="font-display text-lg font-semibold tracking-tight">Runs</h2>
+        <RunsList runs={runs} />
+      </div>
     </div>
   );
 }
