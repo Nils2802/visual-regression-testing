@@ -81,6 +81,34 @@ describe('projects API', () => {
     expect((await deleteViewport(new Request('http://test.local'), ctx(vp.id))).status).toBe(204);
   });
 
+  it('includes baseline target versions in the project-detail response', async () => {
+    const p = await (await createProject(jsonReq('POST', { name: 'versions-proj' }))).json();
+    const vp = await prisma.viewport.create({
+      data: { projectId: p.id, name: 'desktop', width: 1440, height: 900 },
+    });
+    const baseline = await prisma.baseline.create({
+      data: { projectId: p.id, name: 'home', pagePath: '/', sourceType: 'capture' },
+    });
+    const target = await prisma.baselineTarget.create({
+      data: { baselineId: baseline.id, viewportId: vp.id },
+    });
+    await prisma.baselineVersion.create({
+      data: { targetId: target.id, imagePath: 'baselines/home.png', status: 'approved', isActive: true },
+    });
+
+    const detail = await (await getProject(new Request('http://test.local'), ctx(p.id))).json();
+    const detailBaseline = detail.baselines.find((b: { id: string }) => b.id === baseline.id);
+    expect(detailBaseline).toBeDefined();
+    const detailTarget = detailBaseline.targets.find((t: { id: string }) => t.id === target.id);
+    expect(detailTarget).toBeDefined();
+    expect(detailTarget.versions).toHaveLength(1);
+    expect(detailTarget.versions[0]).toMatchObject({
+      imagePath: 'baselines/home.png',
+      status: 'approved',
+      isActive: true,
+    });
+  });
+
   it('404s on unknown ids', async () => {
     expect((await getProject(new Request('http://test.local'), ctx('nope'))).status).toBe(404);
     expect((await patchEnvironment(jsonReq('PATCH', { name: 'x' }), ctx('nope'))).status).toBe(404);

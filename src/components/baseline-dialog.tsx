@@ -54,6 +54,13 @@ export function BaselineDialog({
   const [maskSelectors, setMaskSelectors] = useState('');
   const [selectedViewportIds, setSelectedViewportIds] = useState<string[]>(viewports.map((v) => v.id));
 
+  // Reset/initialize the form only when the dialog opens or the edited
+  // baseline's identity changes — keyed on `baseline?.id`, not the `baseline`
+  // object or the `viewports` array, so an unrelated object-reference change
+  // (e.g. a background reload completing while the dialog is open) can't
+  // silently discard unsaved input. `viewports` and `baseline` are still read
+  // from the current render's closure, so defaults reflect their latest
+  // values at the moment the effect actually runs (open time).
   useEffect(() => {
     if (!isOpen) return;
     if (baseline) {
@@ -73,7 +80,8 @@ export function BaselineDialog({
       setMaskSelectors('');
       setSelectedViewportIds(viewports.map((v) => v.id));
     }
-  }, [isOpen, baseline, viewports]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, baseline?.id]);
 
   function toggleViewport(id: string) {
     setSelectedViewportIds((prev) => (prev.includes(id) ? prev.filter((v) => v !== id) : [...prev, id]));

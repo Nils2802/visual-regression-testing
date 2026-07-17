@@ -16,7 +16,7 @@ export async function GET(_req: Request, ctx: Ctx): Promise<Response> {
     include: {
       environments: true,
       viewports: true,
-      baselines: { include: { targets: true } },
+      baselines: { include: { targets: { include: { versions: true } } } },
     },
   });
   if (!project) return jsonError(404, 'project not found');
