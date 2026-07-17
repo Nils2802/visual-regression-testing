@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { StatusBadge } from '@/components/status-badge';
 import { api, ApiClientError, imageUrl, type BaselineVersion, type RunResult } from '@/lib/client';
@@ -78,11 +78,15 @@ export function ComparisonViewer({
   const isCompare = runType === 'compare';
   // Visual runs never persist a left-side image on RunResult — only compare
   // runs store referenceImagePath (see src/lib/runner.ts: referencePath is
-  // only assigned inside the `runType === 'compare'` branch). So "no
-  // baseline" covers every visual-run result, not just visualStatus==='new'.
+  // only assigned inside the `runType === 'compare'` branch). A visual run
+  // with visualStatus 'diff'/'pass'/'fail' DID have a real baseline (that's
+  // how diffRatio/diffImagePath got produced) — it's just not persisted on
+  // this record — so its placeholder text must not claim "no baseline".
+  // Only visualStatus 'new' genuinely has no baseline at all.
   const leftImagePath = isCompare ? result.referenceImagePath : null;
   const leftLabel = isCompare ? 'reference (live)' : 'baseline';
   const captureLabel = isCompare ? 'test (dev)' : 'capture';
+  const leftUnavailableText = !isCompare && result.visualStatus !== 'new' ? 'baseline image not available' : 'no baseline';
 
   const hasCapture = result.captureImagePath !== null;
   const hasLeft = leftImagePath !== null;
@@ -92,25 +96,60 @@ export function ComparisonViewer({
   const diffAvailable = hasDiff && hasCapture;
 
   function missingReason(needsLeft: boolean, needsDiff: boolean): string {
-    const missing: string[] = [];
-    if (needsLeft && !hasLeft) missing.push(leftLabel);
-    if (needsDiff && !hasDiff) missing.push('diff');
-    if (!hasCapture) missing.push(captureLabel);
-    return `missing ${missing.join(' and ')} image`;
+    const reasons: string[] = [];
+    if (needsLeft && !hasLeft) reasons.push(leftUnavailableText);
+    if (needsDiff && !hasDiff) reasons.push('diff image not available');
+    if (!hasCapture) reasons.push('capture image not available');
+    return reasons.join('; ');
   }
 
   const canApprove = runType !== 'compare' && result.captureImagePath !== null;
 
+  // Tracks the result currently on screen so an approve request that resolves
+  // after the user has already switched to a different result doesn't paint
+  // its success/error note onto the newly-selected result.
+  const currentResultId = useRef(result.id);
+  currentResultId.current = result.id;
+
+  // Reset transient, per-result UI state whenever the selected result
+  // changes (but NOT on every re-render of the same result, e.g. a reload
+  // after promoting). Mode itself persists across a switch unless the newly
+  // selected result can't support it, in which case it falls back to
+  // side-by-side.
+  useEffect(() => {
+    setSliderPos(50);
+    setShowCaptureUnderneath(false);
+    setApproving(false);
+    setApproveError(null);
+    setApproveSuccess(false);
+    setMode((prev) => {
+      if (prev === 'slider' && !sliderAvailable) return 'side-by-side';
+      if (prev === 'diff' && !diffAvailable) return 'side-by-side';
+      return prev;
+    });
+    // Only the identity of the selected result should trigger this reset;
+    // sliderAvailable/diffAvailable are pure functions of `result` and are
+    // already current by the time this runs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [result.id]);
+
   function approve() {
+    const requestedId = result.id;
     setApproving(true);
     setApproveError(null);
-    promoteFn(result.id)
+    promoteFn(requestedId)
       .then(() => {
-        setApproveSuccess(true);
         onPromoted();
+        if (currentResultId.current !== requestedId) return;
+        setApproveSuccess(true);
       })
-      .catch((err) => setApproveError(err instanceof ApiClientError ? err.message : 'something went wrong'))
-      .finally(() => setApproving(false));
+      .catch((err) => {
+        if (currentResultId.current !== requestedId) return;
+        setApproveError(err instanceof ApiClientError ? err.message : 'something went wrong');
+      })
+      .finally(() => {
+        if (currentResultId.current === requestedId) setApproving(false);
+      });
   }
 
   return (
@@ -140,7 +179,7 @@ export function ComparisonViewer({
 
       {mode === 'side-by-side' && (
         <div className="grid grid-cols-2 gap-3">
-          <ImagePane label={leftLabel} path={leftImagePath} emptyText="no baseline" />
+          <ImagePane label={leftLabel} path={leftImagePath} emptyText={leftUnavailableText} />
           <ImagePane label={captureLabel} path={result.captureImagePath} emptyText="no capture" />
         </div>
       )}

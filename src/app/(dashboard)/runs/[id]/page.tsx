@@ -116,7 +116,7 @@ export default function RunDetailPage() {
 
         <div className="flex flex-col gap-2">
           {selectedResult ? (
-            <ComparisonViewer key={selectedResult.id} result={selectedResult} runType={run.type} onPromoted={reload} />
+            <ComparisonViewer result={selectedResult} runType={run.type} onPromoted={reload} />
           ) : (
             <p className="text-sm text-muted">Select a result to preview.</p>
           )}
