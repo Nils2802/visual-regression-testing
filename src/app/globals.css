@@ -1,0 +1,73 @@
+@import 'tailwindcss';
+
+@theme {
+  --color-bg: #101214;
+  --color-surface: #17191d;
+  --color-surface-2: #1e2126;
+  --color-border: #2a2e34;
+  --color-text: #e8eaed;
+  --color-muted: #9aa0a6;
+  --color-accent: #ff2da8;
+  --color-status-pass: #3dd68c;
+  --color-status-diff: #ff2da8;
+  --color-status-fail: #ff5c5c;
+  --color-status-new: #58a6ff;
+  --color-status-pending: #f0b429;
+  --font-display: var(--font-archivo);
+  --font-body: var(--font-instrument);
+  --font-mono: var(--font-jetbrains);
+  --radius: 0.375rem;
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-body);
+}
+
+*:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+:root {
+  --background: #101214; --foreground: #e8eaed;
+  --card: #17191d; --card-foreground: #e8eaed;
+  --popover: #17191d; --popover-foreground: #e8eaed;
+  --primary: #ff2da8; --primary-foreground: #101214;
+  --secondary: #1e2126; --secondary-foreground: #e8eaed;
+  --muted: #1e2126; --muted-foreground: #9aa0a6;
+  --accent: #1e2126; --accent-foreground: #e8eaed;
+  --destructive: #ff5c5c; --border: #2a2e34; --input: #2a2e34; --ring: #ff2da8;
+}
+
+/* Maps shadcn's --background/--foreground/etc. (overridden above) to Tailwind
+   v4 utilities (bg-background, text-primary-foreground, ...) so generated
+   ui/* components render with our palette instead of being unstyled. */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+}
