@@ -38,16 +38,14 @@ export default function ProjectDetailPage() {
   }, []);
 
   const createBaseline = useCallback(
-    (values: BaselineFormValues) => {
-      api.baselines.create(projectId, values).then(load).catch(handleError);
-    },
-    [projectId, load, handleError]
+    (values: BaselineFormValues) => api.baselines.create(projectId, values).then(load),
+    [projectId, load]
   );
 
   const updateBaseline = useCallback(
     (values: BaselineFormValues) => {
-      if (!editingBaseline) return;
-      api.baselines
+      if (!editingBaseline) return Promise.reject(new Error('no baseline selected'));
+      return api.baselines
         .update(editingBaseline.id, {
           name: values.name,
           pagePath: values.pagePath,
@@ -55,10 +53,9 @@ export default function ProjectDetailPage() {
           diffThreshold: values.diffThreshold ?? null,
           maskSelectors: values.maskSelectors ?? [],
         })
-        .then(load)
-        .catch(handleError);
+        .then(load);
     },
-    [editingBaseline, load, handleError]
+    [editingBaseline, load]
   );
 
   const deleteBaseline = useCallback(

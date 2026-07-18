@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import type { Baseline, Viewport } from '@/lib/client';
+import { ApiClientError, type Baseline, type Viewport } from '@/lib/client';
 
 export interface BaselineFormValues {
   name: string;
@@ -38,7 +38,7 @@ export function BaselineDialog({
   baseline?: Baseline;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
-  onSubmit: (values: BaselineFormValues) => void;
+  onSubmit: (values: BaselineFormValues) => Promise<unknown>;
   trigger?: React.ReactNode;
 }) {
   const editing = baseline !== undefined;
@@ -53,6 +53,8 @@ export function BaselineDialog({
   const [diffThreshold, setDiffThreshold] = useState('');
   const [maskSelectors, setMaskSelectors] = useState('');
   const [selectedViewportIds, setSelectedViewportIds] = useState<string[]>(viewports.map((v) => v.id));
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Reset/initialize the form only when the dialog opens or the edited
   // baseline's identity changes — keyed on `baseline?.id`, not the `baseline`
@@ -63,6 +65,8 @@ export function BaselineDialog({
   // values at the moment the effect actually runs (open time).
   useEffect(() => {
     if (!isOpen) return;
+    setSubmitting(false);
+    setError(null);
     if (baseline) {
       setName(baseline.name);
       setPagePath(baseline.pagePath);
@@ -89,6 +93,9 @@ export function BaselineDialog({
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
+    if (!canSubmit) return;
+    setSubmitting(true);
+    setError(null);
     onSubmit({
       name,
       pagePath,
@@ -97,11 +104,16 @@ export function BaselineDialog({
       ...(diffThreshold.trim() ? { diffThreshold: Number(diffThreshold) } : {}),
       maskSelectors: parseMaskSelectors(maskSelectors),
       viewportIds: selectedViewportIds,
-    });
-    setOpen(false);
+    })
+      .then(() => setOpen(false))
+      .catch((err) => setError(err instanceof ApiClientError ? err.message : 'something went wrong'))
+      .finally(() => setSubmitting(false));
   }
 
-  const canSubmit = name.trim().length > 0 && pagePath.trim().length > 0;
+  const canSubmit =
+    name.trim().length > 0 &&
+    pagePath.trim().startsWith('/') &&
+    (editing || selectedViewportIds.length > 0);
 
   return (
     <Dialog open={isOpen} onOpenChange={setOpen}>
@@ -181,7 +193,8 @@ export function BaselineDialog({
               </div>
             </div>
           )}
-          <Button type="submit" disabled={!canSubmit}>
+          {error && <p className="text-sm text-status-fail">{error}</p>}
+          <Button type="submit" disabled={!canSubmit || submitting}>
             {editing ? 'Save changes' : 'Create baseline'}
           </Button>
         </form>
