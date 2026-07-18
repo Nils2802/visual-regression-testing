@@ -9,6 +9,8 @@ const STATUS_COLOR: Record<string, string> = {
   pending: 'text-status-pending border-status-pending/40 bg-status-pending/10 status-pending',
   approved: 'text-status-pass border-status-pass/40 bg-status-pass/10 status-pass',
   rejected: 'text-status-fail border-status-fail/40 bg-status-fail/10 status-fail',
+  queued: 'text-muted border-border bg-surface-2 muted',
+  'sync-error': 'text-status-fail border-status-fail/40 bg-status-fail/10 status-fail',
 };
 
 export function StatusBadge({ kind, value }: { kind: 'visual' | 'functional' | 'run' | 'version'; value: string }) {

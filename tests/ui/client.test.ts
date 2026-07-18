@@ -37,18 +37,29 @@ describe('api client', () => {
     await expect(api.versions.approve('v1')).rejects.toBeInstanceOf(ApiClientError);
   });
 
-  it('sends raw bytes for uploads', async () => {
+  it('falls back to a generic message when the error body is not JSON', async () => {
+    const fn = vi.fn().mockResolvedValue(new Response('not json', { status: 500 }));
+    vi.stubGlobal('fetch', fn);
+    await expect(api.versions.approve('v1')).rejects.toMatchObject({
+      status: 500,
+      message: 'request failed (500)',
+    });
+  });
+
+  it('sends raw bytes for uploads with an image content-type', async () => {
     const fn = stubFetch(201, { id: 'v1', status: 'pending' });
     const bytes = new Uint8Array([137, 80, 78, 71]);
     await api.baselines.uploadVersion('b1', 'vp1', bytes);
     const [url, init] = fn.mock.calls[0];
     expect(url).toBe('/api/baselines/b1/targets/vp1/versions');
     expect(init.body).toBe(bytes);
+    expect(init.headers).toEqual({ 'content-type': 'image/png' });
   });
 
-  it('returns undefined for 204 deletes', async () => {
-    stubFetch(204, null);
+  it('returns undefined for 204 deletes and uses the DELETE method', async () => {
+    const fn = stubFetch(204, null);
     await expect(api.projects.delete('p1')).resolves.toBeUndefined();
+    expect(fn).toHaveBeenCalledWith('/api/projects/p1', expect.objectContaining({ method: 'DELETE' }));
   });
 
   it('builds image and SSE urls', () => {

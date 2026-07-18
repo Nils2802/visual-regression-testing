@@ -14,23 +14,24 @@ function RunRow({ run }: { run: RunSummary }) {
         </Link>
       </TableCell>
       <TableCell className="p-0">
-        <Link href={href} className="block px-2 py-2">
+        <Link href={href} tabIndex={-1} className="block px-2 py-2">
           {run.type}
         </Link>
       </TableCell>
       <TableCell className="p-0">
-        <Link href={href} className="block px-2 py-2">
+        <Link href={href} tabIndex={-1} className="block px-2 py-2">
           {run.environment.name}
         </Link>
       </TableCell>
       <TableCell className="p-0">
-        <Link href={href} className="block px-2 py-2">
+        <Link href={href} tabIndex={-1} className="block px-2 py-2">
           <StatusBadge kind="run" value={run.status} />
         </Link>
       </TableCell>
       <TableCell className="p-0">
         <Link
           href={href}
+          tabIndex={-1}
           className={`block px-2 py-2 font-mono ${run.failedResultCount > 0 ? 'text-status-fail' : ''}`}
         >
           {run.failedResultCount}/{run.resultCount}

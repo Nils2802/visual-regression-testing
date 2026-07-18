@@ -82,11 +82,18 @@ export function ComparisonViewer({
   // with visualStatus 'diff'/'pass'/'fail' DID have a real baseline (that's
   // how diffRatio/diffImagePath got produced) — it's just not persisted on
   // this record — so its placeholder text must not claim "no baseline".
-  // Only visualStatus 'new' genuinely has no baseline at all.
+  // Only visualStatus 'new' (or null — no comparison ever attempted) genuinely
+  // has no baseline at all. Compare runs never had a "baseline" concept at
+  // all — their left pane is a live reference capture, so a missing one reads
+  // as "no reference image", not "no baseline".
   const leftImagePath = isCompare ? result.referenceImagePath : null;
   const leftLabel = isCompare ? 'reference (live)' : 'baseline';
   const captureLabel = isCompare ? 'test (dev)' : 'capture';
-  const leftUnavailableText = !isCompare && result.visualStatus !== 'new' ? 'baseline image not available' : 'no baseline';
+  const leftUnavailableText = isCompare
+    ? 'no reference image'
+    : result.visualStatus === 'new' || result.visualStatus === null
+      ? 'no baseline'
+      : 'baseline image not available';
 
   const hasCapture = result.captureImagePath !== null;
   const hasLeft = leftImagePath !== null;
@@ -96,11 +103,13 @@ export function ComparisonViewer({
   const diffAvailable = hasDiff && hasCapture;
 
   function missingReason(needsLeft: boolean, needsDiff: boolean): string {
-    const reasons: string[] = [];
-    if (needsLeft && !hasLeft) reasons.push(leftUnavailableText);
-    if (needsDiff && !hasDiff) reasons.push('diff image not available');
-    if (!hasCapture) reasons.push('capture image not available');
-    return reasons.join('; ');
+    const missing: string[] = [];
+    if (needsLeft && !hasLeft) missing.push(isCompare ? 'reference' : 'baseline');
+    if (needsDiff && !hasDiff) missing.push('diff');
+    if (!hasCapture) missing.push('capture');
+    if (missing.length === 0) return '';
+    const noun = missing.length > 1 ? 'images' : 'image';
+    return `${missing.join(' and ')} ${noun} not available`;
   }
 
   const canApprove = runType !== 'compare' && result.captureImagePath !== null;

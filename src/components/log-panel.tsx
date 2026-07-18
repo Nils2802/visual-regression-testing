@@ -24,10 +24,11 @@ function LogRow({ entry, ignoreFn, onIgnored }: { entry: LogEntry; ignoreFn?: Ig
   }
 
   function confirmIgnore() {
-    if (!ignoreFn || reason.trim().length === 0) return;
+    const trimmedReason = reason.trim();
+    if (!ignoreFn || trimmedReason.length === 0) return;
     setSubmitting(true);
     setError(null);
-    ignoreFn(entry.id, reason)
+    ignoreFn(entry.id, trimmedReason)
       .then(() => {
         setIgnoring(false);
         setReason('');
