@@ -200,6 +200,40 @@ describe('executeRun — visual regression detected (end-to-end)', () => {
   });
 });
 
+describe('executeRun — expectedResultCount', () => {
+  it('persists expectedResultCount from the eligible baseline×viewport pairs before processing', async () => {
+    const project = await prisma.project.create({ data: { name: `p-${Date.now()}-${Math.random()}` } });
+    const env = await prisma.environment.create({
+      data: { projectId: project.id, name: 'test', baseUrl: server.url },
+    });
+    const vp1 = await prisma.viewport.create({
+      data: { projectId: project.id, name: 'desktop', width: 800, height: 600 },
+    });
+    const vp2 = await prisma.viewport.create({
+      data: { projectId: project.id, name: 'mobile', width: 375, height: 812 },
+    });
+    const baselineA = await prisma.baseline.create({
+      data: { projectId: project.id, name: 'a', pagePath: '/', sourceType: 'capture' },
+    });
+    await prisma.baselineTarget.create({ data: { baselineId: baselineA.id, viewportId: vp1.id } });
+    await prisma.baselineTarget.create({ data: { baselineId: baselineA.id, viewportId: vp2.id } });
+    const baselineB = await prisma.baseline.create({
+      data: { projectId: project.id, name: 'b', pagePath: '/', sourceType: 'capture' },
+    });
+    await prisma.baselineTarget.create({ data: { baselineId: baselineB.id, viewportId: vp1.id } });
+
+    const run = await prisma.run.create({
+      data: { projectId: project.id, environmentId: env.id, type: 'visual', trigger: 'manual' },
+    });
+    await executeRun(run.id, browser);
+
+    const updated = await prisma.run.findUniqueOrThrow({ where: { id: run.id } });
+    expect(updated.expectedResultCount).toBe(3);
+    const resultCount = await prisma.runResult.count({ where: { runId: run.id } });
+    expect(resultCount).toBe(3);
+  });
+});
+
 describe('executeRun — viewportIds subset', () => {
   it('non-empty viewportIds restricts results to the named viewport only', async () => {
     const project = await prisma.project.create({ data: { name: `p-${Date.now()}-${Math.random()}` } });

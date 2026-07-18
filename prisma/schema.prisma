@@ -95,6 +95,7 @@ model Run {
   trigger                String // manual | schedule | api
   status                 String        @default("queued") // queued | running | done | failed
   viewportIds            String        @default("[]") // JSON string[]; empty = all project viewports
+  expectedResultCount    Int? // eligible baseline×viewport pairs, set by the runner at enumeration time
   error                  String?
   createdAt              DateTime      @default(now())
   startedAt              DateTime?

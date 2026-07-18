@@ -18,6 +18,7 @@ function run(overrides: Partial<RunDetail>): RunDetail {
     trigger: 'manual',
     status: 'running',
     viewportIds: [],
+    expectedResultCount: null,
     error: null,
     createdAt: new Date().toISOString(),
     startedAt: new Date().toISOString(),
@@ -53,5 +54,21 @@ describe('RunProgress', () => {
     render(<RunProgress run={run({ status: 'failed' })} expectedCount={2} completedCount={1} />);
     expect(screen.getByText('1/2')).toBeDefined();
     expect(screen.queryByTestId('run-progress-indeterminate')).toBeNull();
+  });
+
+  it('shows completed/expected fraction and a fractional bar while running when expected is known', () => {
+    render(<RunProgress run={run({ status: 'running' })} expectedCount={50} completedCount={3} />);
+    expect(screen.getByText('3/50')).toBeDefined();
+    expect(screen.queryByTestId('run-progress-indeterminate')).toBeNull();
+  });
+
+  it('renders 0/0 with a 0-width (not NaN) bar when expected is known to be zero', () => {
+    const { container } = render(
+      <RunProgress run={run({ status: 'running' })} expectedCount={0} completedCount={0} />
+    );
+    expect(screen.getByText('0/0')).toBeDefined();
+    const bar = container.querySelector('.bg-accent:not(.animate-pulse)');
+    expect(bar).not.toBeNull();
+    expect((bar as HTMLElement).style.width).toBe('0%');
   });
 });

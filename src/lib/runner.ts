@@ -38,6 +38,16 @@ export async function executeRun(runId: string, browser: Browser): Promise<void>
     });
     const rules: IgnoreRuleInput[] = run.project.ignoreRules;
 
+    // Count eligible pairs up front so the UI can show fractional progress.
+    // Mirrors the loop's own eligibility rule: a pair exists iff the baseline
+    // has a target for the viewport.
+    const expectedResultCount = baselines.reduce(
+      (n, baseline) =>
+        n + viewports.filter((v) => baseline.targets.some((t) => t.viewportId === v.id)).length,
+      0
+    );
+    await prisma.run.update({ where: { id: runId }, data: { expectedResultCount } });
+
     for (const baseline of baselines) {
       for (const viewport of viewports) {
         const target = baseline.targets.find((t) => t.viewportId === viewport.id);

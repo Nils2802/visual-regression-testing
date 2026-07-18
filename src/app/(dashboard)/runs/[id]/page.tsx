@@ -45,8 +45,10 @@ export default function RunDetailPage() {
       const event = JSON.parse(msg.data) as { type: string; status?: string };
       if (event.type === 'result') {
         reload();
-      } else if (event.type === 'status' && (event.status === 'done' || event.status === 'failed')) {
-        es.close();
+      } else if (event.type === 'status') {
+        if (event.status === 'done' || event.status === 'failed') {
+          es.close();
+        }
         reload();
       }
     };
@@ -63,12 +65,17 @@ export default function RunDetailPage() {
     return [...map.values()];
   }, [run]);
 
-  // The true total is only known once the run reaches a terminal state: rows
-  // are created lazily, one per baseline×viewport pair immediately before it
-  // is processed (see runner.ts), so `results.length` while queued/running is
-  // just "how many have started so far" — not a valid denominator. Show it as
-  // an indeterminate count until then instead of a misleading N/N-ish ratio.
-  const expectedCount = run && (run.status === 'done' || run.status === 'failed') ? run.results.length : null;
+  // The runner persists the eligible baseline×viewport pair count up front
+  // (see runner.ts), so the true total is known as soon as the SSE `running`
+  // status event lands and we reload. Pre-migration runs have a null
+  // `expectedResultCount`; for those, fall back to `results.length` once the
+  // run is terminal (rows are created lazily, so mid-run `results.length` is
+  // just "how many have started so far" — not a valid denominator) and show
+  // an indeterminate count until then.
+  const expectedCount = run
+    ? run.expectedResultCount ??
+      (run.status === 'done' || run.status === 'failed' ? run.results.length : null)
+    : null;
   const completedCount = run ? run.results.filter((r) => r.visualStatus !== null).length : 0;
   const selectedResult = run?.results.find((r) => r.id === selectedId) ?? null;
 
