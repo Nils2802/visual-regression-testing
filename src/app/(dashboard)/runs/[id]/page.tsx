@@ -3,33 +3,24 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { api, ApiClientError, runEventsUrl, type RunDetail, type Viewport } from '@/lib/client';
+import { api, runEventsUrl, type RunDetail, type Viewport } from '@/lib/client';
 import { RunProgress } from '@/components/run-progress';
 import { ResultList, type StatusFilter } from '@/components/result-list';
 import { ComparisonViewer } from '@/components/comparison-viewer';
 import { LogPanel } from '@/components/log-panel';
+import { Button } from '@/components/ui/button';
+import { useLoad } from '@/lib/use-load';
 
 export default function RunDetailPage() {
   const params = useParams<{ id: string }>();
   const runId = params.id;
 
-  const [run, setRun] = useState<RunDetail | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [viewportFilter, setViewportFilter] = useState<string | null>(null);
 
-  const reload = useCallback(() => {
-    api.runs
-      .get(runId)
-      .then((r) => {
-        setRun(r);
-        setError(null);
-      })
-      .catch((e) => setError(e instanceof ApiClientError ? e.message : 'failed to load'));
-  }, [runId]);
-
-  useEffect(reload, [reload]);
+  const fetchRun = useCallback(() => api.runs.get(runId), [runId]);
+  const { data: run, error, reload } = useLoad<RunDetail>(fetchRun);
 
   // While the run is in flight, open an SSE connection and refetch the run on
   // every `result`/terminal `status` event. Progress counts are derived from
@@ -82,7 +73,16 @@ export default function RunDetailPage() {
   if (!run) {
     return (
       <div className="mx-auto max-w-6xl">
-        {error ? <p className="text-sm text-status-fail">{error}</p> : <p className="text-sm text-muted">Loading…</p>}
+        {error ? (
+          <div className="flex flex-col items-start gap-2">
+            <p className="text-sm text-status-fail">{error}</p>
+            <Button type="button" variant="outline" size="sm" onClick={reload}>
+              Retry
+            </Button>
+          </div>
+        ) : (
+          <p className="text-sm text-muted">Loading…</p>
+        )}
       </div>
     );
   }

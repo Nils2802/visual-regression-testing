@@ -1,80 +1,88 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { api, ApiClientError, type ProjectDetail, type IgnoreRule } from '@/lib/client';
+import { api, type ProjectDetail, type IgnoreRule } from '@/lib/client';
 import { EnvironmentsTable } from '@/components/settings/environments-table';
 import { ViewportsTable } from '@/components/settings/viewports-table';
 import { IgnoreRulesTable } from '@/components/settings/ignore-rules-table';
+import { Button } from '@/components/ui/button';
+import { useLoad } from '@/lib/use-load';
+
+interface ProjectSettingsData {
+  project: ProjectDetail;
+  rules: IgnoreRule[];
+}
 
 export default function ProjectSettingsPage() {
   const params = useParams<{ id: string }>();
   const projectId = params.id;
 
-  const [project, setProject] = useState<ProjectDetail | null>(null);
-  const [rules, setRules] = useState<IgnoreRule[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  const load = useCallback(() => {
-    Promise.all([api.projects.get(projectId), api.ignoreRules.list(projectId)])
-      .then(([p, r]) => {
-        setProject(p);
-        setRules(r.rules);
-        setError(null);
-      })
-      .catch((e) => setError(e instanceof ApiClientError ? e.message : 'failed to load'));
-  }, [projectId]);
-
-  useEffect(load, [load]);
-
-  const handleError = useCallback((e: unknown) => {
-    setError(e instanceof ApiClientError ? e.message : 'something went wrong');
-  }, []);
+  const fetchSettings = useCallback(
+    () =>
+      Promise.all([api.projects.get(projectId), api.ignoreRules.list(projectId)]).then(([project, r]) => ({
+        project,
+        rules: r.rules,
+      })),
+    [projectId]
+  );
+  const { data, error, reload, fail } = useLoad<ProjectSettingsData>(fetchSettings);
+  const project = data?.project ?? null;
+  const rules = data?.rules ?? null;
 
   const addEnvironment = useCallback(
     (body: { name: string; baseUrl: string }) => {
-      api.environments.create(projectId, body).then(load).catch(handleError);
+      api.environments.create(projectId, body).then(reload).catch(fail);
     },
-    [projectId, load, handleError]
+    [projectId, reload, fail]
   );
   const deleteEnvironment = useCallback(
     (envId: string) => {
-      api.environments.delete(envId).then(load).catch(handleError);
+      api.environments.delete(envId).then(reload).catch(fail);
     },
-    [load, handleError]
+    [reload, fail]
   );
 
   const addViewport = useCallback(
     (body: { name: string; width: number; height: number }) => {
-      api.viewports.create(projectId, body).then(load).catch(handleError);
+      api.viewports.create(projectId, body).then(reload).catch(fail);
     },
-    [projectId, load, handleError]
+    [projectId, reload, fail]
   );
   const deleteViewport = useCallback(
     (viewportId: string) => {
-      api.viewports.delete(viewportId).then(load).catch(handleError);
+      api.viewports.delete(viewportId).then(reload).catch(fail);
     },
-    [load, handleError]
+    [reload, fail]
   );
 
   const addIgnoreRule = useCallback(
     (body: { reason: string; entryType?: string; urlPattern?: string; messagePattern?: string }) => {
-      api.ignoreRules.create(projectId, body).then(load).catch(handleError);
+      api.ignoreRules.create(projectId, body).then(reload).catch(fail);
     },
-    [projectId, load, handleError]
+    [projectId, reload, fail]
   );
   const deleteIgnoreRule = useCallback(
     (ruleId: string) => {
-      api.ignoreRules.delete(ruleId).then(load).catch(handleError);
+      api.ignoreRules.delete(ruleId).then(reload).catch(fail);
     },
-    [load, handleError]
+    [reload, fail]
   );
 
   if (!project) {
     return (
       <div className="mx-auto max-w-3xl">
-        {error ? <p className="text-sm text-status-fail">{error}</p> : <p className="text-sm text-muted">Loading…</p>}
+        {error ? (
+          <div className="flex flex-col items-start gap-2">
+            <p className="text-sm text-status-fail">{error}</p>
+            <Button type="button" variant="outline" size="sm" onClick={reload}>
+              Retry
+            </Button>
+          </div>
+        ) : (
+          <p className="text-sm text-muted">Loading…</p>
+        )}
       </div>
     );
   }

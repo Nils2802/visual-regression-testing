@@ -1,9 +1,10 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { ViewportChip } from '@/components/viewport-chip';
 import { Button } from '@/components/ui/button';
 import { api, ApiClientError, imageUrl, type PendingVersion } from '@/lib/client';
+import { useLoad } from '@/lib/use-load';
 
 function ApprovalRow({ version, onDone }: { version: PendingVersion; onDone: () => void }) {
   const [busy, setBusy] = useState<'approve' | 'reject' | null>(null);
@@ -53,20 +54,8 @@ function ApprovalRow({ version, onDone }: { version: PendingVersion; onDone: () 
 }
 
 export default function ApprovalsPage() {
-  const [versions, setVersions] = useState<PendingVersion[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  const reload = useCallback(() => {
-    api.versions
-      .pending()
-      .then((r) => {
-        setVersions(r.versions);
-        setError(null);
-      })
-      .catch((e) => setError(e instanceof ApiClientError ? e.message : 'failed to load'));
-  }, []);
-
-  useEffect(reload, [reload]);
+  const fetchPending = useCallback(() => api.versions.pending().then((r) => r.versions), []);
+  const { data: versions, error, reload } = useLoad<PendingVersion[]>(fetchPending);
 
   const groups = new Map<string, PendingVersion[]>();
   for (const v of versions ?? []) {
@@ -80,7 +69,17 @@ export default function ApprovalsPage() {
     <div className="mx-auto flex max-w-4xl flex-col gap-6">
       <h1 className="font-display text-2xl font-semibold tracking-tight">Approvals</h1>
 
-      {error && <p className="text-sm text-status-fail">{error}</p>}
+      {error &&
+        (versions === null ? (
+          <div className="flex flex-col items-start gap-2">
+            <p className="text-sm text-status-fail">{error}</p>
+            <Button type="button" variant="outline" size="sm" onClick={reload}>
+              Retry
+            </Button>
+          </div>
+        ) : (
+          <p className="text-sm text-status-fail">{error}</p>
+        ))}
 
       {versions && versions.length === 0 && (
         <p className="text-sm text-muted">Nothing pending — approved baselines are up to date.</p>
