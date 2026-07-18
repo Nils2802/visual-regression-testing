@@ -10,6 +10,7 @@ import { ComparisonViewer } from '@/components/comparison-viewer';
 import { LogPanel } from '@/components/log-panel';
 import { Button } from '@/components/ui/button';
 import { useLoad } from '@/lib/use-load';
+import { nextRetryDelay } from '@/lib/sse-retry';
 
 export default function RunDetailPage() {
   const params = useParams<{ id: string }>();
@@ -31,20 +32,48 @@ export default function RunDetailPage() {
   // data is always correct.
   useEffect(() => {
     if (!run || (run.status !== 'queued' && run.status !== 'running')) return;
-    const es = new EventSource(runEventsUrl(run.id));
-    es.onmessage = (msg) => {
-      const event = JSON.parse(msg.data) as { type: string; status?: string };
-      if (event.type === 'result') {
-        reload();
-      } else if (event.type === 'status') {
-        if (event.status === 'done' || event.status === 'failed') {
-          es.close();
+    const runId = run.id;
+    let es: EventSource | null = null;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+    let attempt = 0;
+    let stopped = false;
+
+    const connect = () => {
+      es = new EventSource(runEventsUrl(runId));
+      es.onopen = () => {
+        attempt = 0;
+      };
+      es.onmessage = (msg) => {
+        const event = JSON.parse(msg.data) as { type: string; status?: string };
+        if (event.type === 'result') {
+          reload();
+        } else if (event.type === 'status') {
+          if (event.status === 'done' || event.status === 'failed') {
+            stopped = true;
+            es?.close();
+          }
+          reload();
         }
-        reload();
-      }
+      };
+      es.onerror = () => {
+        // readyState CONNECTING = the browser is already retrying natively;
+        // leave it alone. CLOSED = fatal — re-create with capped backoff and
+        // refetch on re-establishment to catch anything missed meanwhile.
+        if (stopped || !es || es.readyState !== EventSource.CLOSED) return;
+        retryTimer = setTimeout(() => {
+          if (stopped) return;
+          reload();
+          connect();
+        }, nextRetryDelay(attempt++));
+      };
     };
-    es.onerror = () => es.close();
-    return () => es.close();
+
+    connect();
+    return () => {
+      stopped = true;
+      if (retryTimer) clearTimeout(retryTimer);
+      es?.close();
+    };
   }, [run?.id, run?.status, reload]);
 
   const viewports = useMemo(() => {
