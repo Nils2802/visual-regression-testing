@@ -10,7 +10,7 @@ describe('StatusBadge', () => {
     expect(badge.className).toContain('status-diff');
   });
 
-  it('falls back to muted styling for unknown values', () => {
+  it('renders queued with its explicit muted styling', () => {
     render(<StatusBadge kind="run" value="queued" />);
     expect(screen.getByText('queued').className).toContain('muted');
   });
