@@ -14,6 +14,7 @@ function result(overrides: Partial<RunResult>): RunResult {
     viewportId: 'vp1',
     captureImagePath: null,
     referenceImagePath: null,
+    baselineImagePath: null,
     diffImagePath: null,
     visualStatus: 'pass',
     functionalStatus: 'pass',
@@ -136,6 +137,23 @@ describe('ComparisonViewer', () => {
     const sliderTab = screen.getByText('slider').closest('button') as HTMLButtonElement;
     expect(sliderTab.disabled).toBe(true);
     expect(sliderTab.title).toBe('baseline image not available');
+  });
+
+  it('renders the pinned baseline image and enables slider for visual-run results', () => {
+    const pinnedResult = result({
+      id: 'r-pinned',
+      visualStatus: 'diff',
+      captureImagePath: 'captures/r-pinned.png',
+      diffImagePath: 'diffs/r-pinned.png',
+      baselineImagePath: 'baselines/t1-123.png',
+    });
+    render(<ComparisonViewer result={pinnedResult} runType="visual" promoteFn={promoteFn()} onPromoted={vi.fn()} />);
+
+    expect(screen.getByAltText('baseline image')).toBeDefined();
+    expect(screen.queryByText('baseline image not available')).toBeNull();
+
+    const sliderTab = screen.getByText('slider').closest('button') as HTMLButtonElement;
+    expect(sliderTab.disabled).toBe(false);
   });
 
   it('persists the selected mode across a result switch when still available', () => {

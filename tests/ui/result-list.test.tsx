@@ -18,6 +18,7 @@ function result(overrides: Partial<RunResult>): RunResult {
     viewportId: viewportDesktop.id,
     captureImagePath: null,
     referenceImagePath: null,
+    baselineImagePath: null,
     diffImagePath: null,
     visualStatus: 'pass',
     functionalStatus: 'pass',

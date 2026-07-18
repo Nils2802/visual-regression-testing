@@ -189,6 +189,7 @@ async function processResult(browser: Browser, job: ResultJob): Promise<void> {
     data: {
       captureImagePath: capturePath,
       referenceImagePath: referencePath,
+      baselineImagePath: job.runType === 'compare' ? null : job.activeBaselinePath,
       diffImagePath: diffPath,
       diffRatio: diff.ratio,
       sizeMismatch: diff.sizeMismatch,

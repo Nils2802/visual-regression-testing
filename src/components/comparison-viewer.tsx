@@ -76,17 +76,18 @@ export function ComparisonViewer({
   const [approveSuccess, setApproveSuccess] = useState(false);
 
   const isCompare = runType === 'compare';
-  // Visual runs never persist a left-side image on RunResult — only compare
-  // runs store referenceImagePath (see src/lib/runner.ts: referencePath is
-  // only assigned inside the `runType === 'compare'` branch). A visual run
-  // with visualStatus 'diff'/'pass'/'fail' DID have a real baseline (that's
-  // how diffRatio/diffImagePath got produced) — it's just not persisted on
-  // this record — so its placeholder text must not claim "no baseline".
-  // Only visualStatus 'new' (or null — no comparison ever attempted) genuinely
-  // has no baseline at all. Compare runs never had a "baseline" concept at
-  // all — their left pane is a live reference capture, so a missing one reads
-  // as "no reference image", not "no baseline".
-  const leftImagePath = isCompare ? result.referenceImagePath : null;
+  // Visual runs pin the exact baseline image the diff ran against onto
+  // baselineImagePath (see src/lib/runner.ts: processResult's diff-branch
+  // update); compare runs instead store a live referenceImagePath and never
+  // populate baselineImagePath. Pre-migration rows and results with
+  // visualStatus 'new'/null (no approved baseline existed to diff against)
+  // still have a null path here, so the placeholder text below still
+  // distinguishes "no baseline" (new/null — none ever existed) from
+  // "baseline image not available" (a diff/pass/fail row predating this
+  // field). Compare runs never had a "baseline" concept at all — their left
+  // pane is a live reference capture, so a missing one reads as "no
+  // reference image", not "no baseline".
+  const leftImagePath = isCompare ? result.referenceImagePath : result.baselineImagePath;
   const leftLabel = isCompare ? 'reference (live)' : 'baseline';
   const captureLabel = isCompare ? 'test (dev)' : 'capture';
   const leftUnavailableText = isCompare

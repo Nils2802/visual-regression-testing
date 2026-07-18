@@ -113,6 +113,7 @@ model RunResult {
   viewportId         String
   captureImagePath   String?
   referenceImagePath String? // compare runs
+  baselineImagePath  String? // visual runs: path of the approved baseline version image the diff ran against, pinned at compare time
   diffImagePath      String?
   visualStatus       String? // pass | diff | fail | new
   functionalStatus   String? // pass | fail

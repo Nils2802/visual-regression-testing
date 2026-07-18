@@ -94,6 +94,26 @@ describe('executeRun — visual', () => {
     expect(result.diffRatio).toBeLessThanOrEqual(0.01);
   });
 
+  it('pins the compared baseline image path on visual-run results', async () => {
+    const { project, env, baseline } = await seed();
+    const run1 = await prisma.run.create({
+      data: { projectId: project.id, environmentId: env.id, type: 'visual', trigger: 'manual' },
+    });
+    await executeRun(run1.id, browser);
+    await approveVersionsFor(baseline.id);
+    const approvedVersion = await prisma.baselineVersion.findFirstOrThrow({
+      where: { target: { baselineId: baseline.id }, status: 'approved' },
+    });
+
+    const run2 = await prisma.run.create({
+      data: { projectId: project.id, environmentId: env.id, type: 'visual', trigger: 'manual' },
+    });
+    await executeRun(run2.id, browser);
+
+    const result = await prisma.runResult.findFirstOrThrow({ where: { runId: run2.id } });
+    expect(result.baselineImagePath).toBe(approvedVersion.imagePath);
+  });
+
   it('console error on page → functionalStatus fail with persisted log entry', async () => {
     const { project, env } = await seed('/noisy');
     const run = await prisma.run.create({
@@ -293,6 +313,27 @@ describe('executeRun — compare', () => {
       where: { target: { baseline: { projectId: project.id } } },
     });
     expect(versions).toHaveLength(0);
+  });
+
+  it('leaves baselineImagePath null on compare-run results', async () => {
+    const { project, env } = await seed();
+    const refEnv = await prisma.environment.create({
+      data: { projectId: project.id, name: 'live', baseUrl: server.url },
+    });
+    const run = await prisma.run.create({
+      data: {
+        projectId: project.id,
+        environmentId: env.id,
+        referenceEnvironmentId: refEnv.id,
+        type: 'compare',
+        trigger: 'manual',
+      },
+    });
+    await executeRun(run.id, browser);
+
+    const result = await prisma.runResult.findFirstOrThrow({ where: { runId: run.id } });
+    expect(result.baselineImagePath).toBeNull();
+    expect(result.referenceImagePath).not.toBeNull();
   });
 
   it('reference environment deleted before execution → run failed, not stuck at queued', async () => {
