@@ -19,7 +19,6 @@ export async function executeRun(runId: string, browser: Browser): Promise<void>
       where: { id: runId },
       data: { status: 'running', startedAt: new Date() },
     });
-    emitRunEvent(runId, { type: 'status', status: 'running' });
 
     const referenceEnv = run.referenceEnvironmentId
       ? await prisma.environment.findUniqueOrThrow({ where: { id: run.referenceEnvironmentId } })
@@ -47,6 +46,10 @@ export async function executeRun(runId: string, browser: Browser): Promise<void>
       0
     );
     await prisma.run.update({ where: { id: runId }, data: { expectedResultCount } });
+
+    // Emitted only after expectedResultCount is persisted, so the client's
+    // running-triggered reload always sees the real total.
+    emitRunEvent(runId, { type: 'status', status: 'running' });
 
     for (const baseline of baselines) {
       for (const viewport of viewports) {

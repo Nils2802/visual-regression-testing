@@ -84,9 +84,10 @@ export function ComparisonViewer({
   // still have a null path here, so the placeholder text below still
   // distinguishes "no baseline" (new/null — none ever existed) from
   // "baseline image not available" (a diff/pass/fail row predating this
-  // field). Compare runs never had a "baseline" concept at all — their left
-  // pane is a live reference capture, so a missing one reads as "no
-  // reference image", not "no baseline".
+  // field, or rows where capture/diff threw before the final update).
+  // Compare runs never had a "baseline" concept at all — their left pane is a
+  // live reference capture, so a missing one reads as "no reference image",
+  // not "no baseline".
   const leftImagePath = isCompare ? result.referenceImagePath : result.baselineImagePath;
   const leftLabel = isCompare ? 'reference (live)' : 'baseline';
   const captureLabel = isCompare ? 'test (dev)' : 'capture';

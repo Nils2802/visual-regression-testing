@@ -66,12 +66,12 @@ export default function RunDetailPage() {
   }, [run]);
 
   // The runner persists the eligible baseline×viewport pair count up front
-  // (see runner.ts), so the true total is known as soon as the SSE `running`
-  // status event lands and we reload. Pre-migration runs have a null
-  // `expectedResultCount`; for those, fall back to `results.length` once the
-  // run is terminal (rows are created lazily, so mid-run `results.length` is
-  // just "how many have started so far" — not a valid denominator) and show
-  // an indeterminate count until then.
+  // (see runner.ts) and emits the `running` status event only after that
+  // persist, so the running-triggered reload sees the real total.
+  // Pre-migration runs have a null `expectedResultCount`; for those, fall back
+  // to `results.length` once the run is terminal (rows are created lazily, so
+  // mid-run `results.length` is just "how many have started so far" — not a
+  // valid denominator) and show an indeterminate count until then.
   const expectedCount = run
     ? run.expectedResultCount ??
       (run.status === 'done' || run.status === 'failed' ? run.results.length : null)
