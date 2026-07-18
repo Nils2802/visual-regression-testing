@@ -34,7 +34,7 @@ function RunRow({ run }: { run: RunSummary }) {
           tabIndex={-1}
           className={`block px-2 py-2 font-mono ${run.failedResultCount > 0 ? 'text-status-fail' : ''}`}
         >
-          {run.failedResultCount}/{run.resultCount}
+          {run.failedResultCount}/{run.expectedResultCount ?? run.resultCount}
         </Link>
       </TableCell>
     </TableRow>
