@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { prisma } from '@/lib/db';
-import { jsonError, readJson, serializeBaseline } from '@/lib/api';
+import { jsonError, readJson, serializeBaseline, errorResponse } from '@/lib/api';
+import { parseFigmaFrameUrl } from '@/lib/figma';
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -10,6 +11,7 @@ const patchSchema = z.object({
   elementSelector: z.string().min(1).nullable().optional(),
   diffThreshold: z.number().gt(0).lt(1).nullable().optional(),
   maskSelectors: z.array(z.string().min(1)).optional(),
+  figmaFrames: z.array(z.object({ viewportId: z.string(), url: z.string() })).optional(),
 });
 
 export async function GET(_req: Request, ctx: Ctx): Promise<Response> {
@@ -32,7 +34,28 @@ export async function PATCH(req: Request, ctx: Ctx): Promise<Response> {
   if (!body.ok) return body.res;
   const existing = await prisma.baseline.findUnique({ where: { id } });
   if (!existing) return jsonError(404, 'baseline not found');
-  const { maskSelectors, ...fields } = body.data;
+  const { maskSelectors, figmaFrames, ...fields } = body.data;
+
+  if (figmaFrames !== undefined) {
+    if (existing.sourceType !== 'figma') {
+      return jsonError(400, 'figmaFrames only allowed on figma-sourced baselines');
+    }
+    let parsed: { viewportId: string; fileKey: string; nodeId: string }[];
+    try {
+      parsed = figmaFrames.map((f) => ({ viewportId: f.viewportId, ...parseFigmaFrameUrl(f.url) }));
+    } catch (err) {
+      return errorResponse(err);
+    }
+    await Promise.all(
+      parsed.map((p) =>
+        prisma.baselineTarget.updateMany({
+          where: { baselineId: id, viewportId: p.viewportId },
+          data: { figmaFileKey: p.fileKey, figmaNodeId: p.nodeId },
+        })
+      )
+    );
+  }
+
   const baseline = await prisma.baseline.update({
     where: { id },
     data: {

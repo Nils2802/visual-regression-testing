@@ -25,6 +25,8 @@ function baseline(overrides: Partial<Baseline>): Baseline {
         id: 't1',
         baselineId: 'b1',
         viewportId: 'vp1',
+        figmaFileKey: null,
+        figmaNodeId: null,
         versions: [{ id: 'v1', targetId: 't1', imagePath: 'baselines/x.png', status: 'approved', isActive: true, createdAt: '' }],
       },
     ],
@@ -36,7 +38,7 @@ describe('BaselineGrid', () => {
   it('shows active-version thumbnail when present, placeholder otherwise', () => {
     render(
       <BaselineGrid
-        baselines={[baseline({}), baseline({ id: 'b2', name: 'nav', targets: [{ id: 't2', baselineId: 'b2', viewportId: 'vp1', versions: [] }] })]}
+        baselines={[baseline({}), baseline({ id: 'b2', name: 'nav', targets: [{ id: 't2', baselineId: 'b2', viewportId: 'vp1', figmaFileKey: null, figmaNodeId: null, versions: [] }] })]}
         viewports={viewports}
         onUpload={vi.fn()}
         onEdit={vi.fn()}

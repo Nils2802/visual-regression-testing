@@ -37,7 +37,7 @@ async function request<T>(method: string, url: string, body?: unknown): Promise<
 export interface Environment { id: string; projectId: string; name: string; baseUrl: string }
 export interface Viewport { id: string; projectId: string; name: string; width: number; height: number }
 export interface BaselineVersion { id: string; targetId: string; imagePath: string; status: string; isActive: boolean; createdAt: string }
-export interface BaselineTarget { id: string; baselineId: string; viewportId: string; viewport?: Viewport; versions?: BaselineVersion[] }
+export interface BaselineTarget { id: string; baselineId: string; viewportId: string; figmaFileKey: string | null; figmaNodeId: string | null; viewport?: Viewport; versions?: BaselineVersion[] }
 export interface BaselineTargetDetail extends BaselineTarget { viewport: Viewport; versions: BaselineVersion[] }
 export interface Baseline { id: string; projectId: string; name: string; pagePath: string; elementSelector: string | null; diffThreshold: number | null; maskSelectors: string[]; sourceType: string; syncStatus: string; syncError: string | null; targets?: BaselineTarget[] }
 export interface BaselineDetail extends Baseline { targets: BaselineTargetDetail[] }
@@ -73,9 +73,9 @@ export const api = {
     delete: (id: string) => request<undefined>('DELETE', `/api/viewports/${id}`),
   },
   baselines: {
-    create: (projectId: string, body: { name: string; pagePath: string; elementSelector?: string; diffThreshold?: number; maskSelectors?: string[]; sourceType: 'upload' | 'capture'; viewportIds?: string[] }) => request<Baseline>('POST', `/api/projects/${projectId}/baselines`, body),
+    create: (projectId: string, body: { name: string; pagePath: string; elementSelector?: string; diffThreshold?: number; maskSelectors?: string[]; sourceType: 'upload' | 'capture' | 'figma'; viewportIds?: string[]; figmaFrames?: { viewportId: string; url: string }[] }) => request<Baseline>('POST', `/api/projects/${projectId}/baselines`, body),
     get: (id: string) => request<BaselineDetail>('GET', `/api/baselines/${id}`),
-    update: (id: string, body: Partial<{ name: string; pagePath: string; elementSelector: string | null; diffThreshold: number | null; maskSelectors: string[] }>) => request<Baseline>('PATCH', `/api/baselines/${id}`, body),
+    update: (id: string, body: Partial<{ name: string; pagePath: string; elementSelector: string | null; diffThreshold: number | null; maskSelectors: string[]; figmaFrames: { viewportId: string; url: string }[] }>) => request<Baseline>('PATCH', `/api/baselines/${id}`, body),
     delete: (id: string) => request<undefined>('DELETE', `/api/baselines/${id}`),
     uploadVersion: (baselineId: string, viewportId: string, png: Uint8Array) => request<BaselineVersion>('POST', `/api/baselines/${baselineId}/targets/${viewportId}/versions`, png),
     sync: (id: string) => request<BaselineDetail>('POST', `/api/baselines/${id}/sync`),

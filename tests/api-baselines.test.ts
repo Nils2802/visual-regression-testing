@@ -218,6 +218,137 @@ describe('baselines API', () => {
     expect((await deleteBaseline(new Request('http://test.local'), ctx('nope'))).status).toBe(404);
   });
 
+  describe('figma-sourced baselines', () => {
+    it('creates a figma baseline with a frame URL per viewport, storing parsed fileKey/nodeId (dash→colon)', async () => {
+      const res = await createBaseline(
+        jsonReq({
+          name: 'figma-home',
+          pagePath: '/figma-home',
+          sourceType: 'figma',
+          viewportIds: [vpMobile, vpDesktop],
+          figmaFrames: [
+            { viewportId: vpMobile, url: 'https://www.figma.com/design/ABC123/Home?node-id=1-2' },
+            { viewportId: vpDesktop, url: 'https://www.figma.com/design/ABC123/Home?node-id=3-4' },
+          ],
+        }),
+        ctx(projectId)
+      );
+      expect(res.status).toBe(201);
+      const baseline = await res.json();
+      const mobileTarget = baseline.targets.find((t: { viewportId: string }) => t.viewportId === vpMobile);
+      const desktopTarget = baseline.targets.find((t: { viewportId: string }) => t.viewportId === vpDesktop);
+      expect(mobileTarget.figmaFileKey).toBe('ABC123');
+      expect(mobileTarget.figmaNodeId).toBe('1:2');
+      expect(desktopTarget.figmaFileKey).toBe('ABC123');
+      expect(desktopTarget.figmaNodeId).toBe('3:4');
+    });
+
+    it('rejects a figma create missing a viewport frame URL', async () => {
+      const res = await createBaseline(
+        jsonReq({
+          name: 'figma-missing',
+          pagePath: '/figma-missing',
+          sourceType: 'figma',
+          viewportIds: [vpMobile, vpDesktop],
+          figmaFrames: [
+            { viewportId: vpMobile, url: 'https://www.figma.com/design/ABC123/Home?node-id=1-2' },
+          ],
+        }),
+        ctx(projectId)
+      );
+      expect(res.status).toBe(400);
+      const body = await res.json();
+      expect(body.error).toBe('figma baselines need a frame URL per viewport');
+    });
+
+    it('rejects a figma create with an extra frame for a viewport outside the selection', async () => {
+      const res = await createBaseline(
+        jsonReq({
+          name: 'figma-extra',
+          pagePath: '/figma-extra',
+          sourceType: 'figma',
+          viewportIds: [vpMobile],
+          figmaFrames: [
+            { viewportId: vpMobile, url: 'https://www.figma.com/design/ABC123/Home?node-id=1-2' },
+            { viewportId: vpDesktop, url: 'https://www.figma.com/design/ABC123/Home?node-id=3-4' },
+          ],
+        }),
+        ctx(projectId)
+      );
+      expect(res.status).toBe(400);
+      const body = await res.json();
+      expect(body.error).toBe('figma baselines need a frame URL per viewport');
+    });
+
+    it('rejects a figma create with no figmaFrames at all', async () => {
+      const res = await createBaseline(
+        jsonReq({ name: 'figma-none', pagePath: '/figma-none', sourceType: 'figma', viewportIds: [vpMobile] }),
+        ctx(projectId)
+      );
+      expect(res.status).toBe(400);
+      const body = await res.json();
+      expect(body.error).toBe('figma baselines need a frame URL per viewport');
+    });
+
+    it('rejects a figma create with an invalid frame URL', async () => {
+      const res = await createBaseline(
+        jsonReq({
+          name: 'figma-bad-url',
+          pagePath: '/figma-bad-url',
+          sourceType: 'figma',
+          viewportIds: [vpMobile],
+          figmaFrames: [{ viewportId: vpMobile, url: 'not-a-url' }],
+        }),
+        ctx(projectId)
+      );
+      expect(res.status).toBe(400);
+    });
+
+    it('rejects a figmaFrames PATCH on a non-figma baseline', async () => {
+      const created = await createBaseline(
+        jsonReq({ name: 'upload-patch', pagePath: '/upload-patch', sourceType: 'upload' }),
+        ctx(projectId)
+      );
+      const baseline = await created.json();
+      const res = await patchBaseline(
+        jsonReq(
+          { figmaFrames: [{ viewportId: vpMobile, url: 'https://www.figma.com/design/ABC123/Home?node-id=1-2' }] },
+          'PATCH'
+        ),
+        ctx(baseline.id)
+      );
+      expect(res.status).toBe(400);
+    });
+
+    it('updates target figma links via PATCH on a figma baseline', async () => {
+      const created = await createBaseline(
+        jsonReq({
+          name: 'figma-patch',
+          pagePath: '/figma-patch',
+          sourceType: 'figma',
+          viewportIds: [vpMobile],
+          figmaFrames: [{ viewportId: vpMobile, url: 'https://www.figma.com/design/ABC123/Home?node-id=1-2' }],
+        }),
+        ctx(projectId)
+      );
+      const baseline = await created.json();
+
+      const res = await patchBaseline(
+        jsonReq(
+          { figmaFrames: [{ viewportId: vpMobile, url: 'https://www.figma.com/design/XYZ999/Home?node-id=5-6' }] },
+          'PATCH'
+        ),
+        ctx(baseline.id)
+      );
+      expect(res.status).toBe(200);
+
+      const detail = await (await getBaseline(new Request('http://test.local'), ctx(baseline.id))).json();
+      const target = detail.targets.find((t: { viewportId: string }) => t.viewportId === vpMobile);
+      expect(target.figmaFileKey).toBe('XYZ999');
+      expect(target.figmaNodeId).toBe('5:6');
+    });
+  });
+
   // The route always exercises the real (unmockable) network fetch, so it can
   // only cover paths that fail before any Figma call is made: unknown
   // baseline (404) and no-figma-linked-targets (422). syncBaseline's batching,

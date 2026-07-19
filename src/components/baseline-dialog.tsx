@@ -12,11 +12,19 @@ import { ApiClientError, type Baseline, type Viewport } from '@/lib/client';
 export interface BaselineFormValues {
   name: string;
   pagePath: string;
-  sourceType: 'upload' | 'capture';
+  sourceType: 'upload' | 'capture' | 'figma';
   elementSelector?: string;
   diffThreshold?: number;
   maskSelectors?: string[];
   viewportIds?: string[];
+  figmaFrames?: { viewportId: string; url: string }[];
+}
+
+// Reconstructs the editable Figma frame URL from a target's stored
+// fileKey/nodeId — the inverse of parseFigmaFrameUrl (colon node ids are
+// dash-separated in the URL's node-id query param).
+function figmaFrameUrl(fileKey: string, nodeId: string): string {
+  return `https://www.figma.com/design/${fileKey}/frame?node-id=${nodeId.replaceAll(':', '-')}`;
 }
 
 function parseMaskSelectors(text: string): string[] {
@@ -48,11 +56,12 @@ export function BaselineDialog({
 
   const [name, setName] = useState('');
   const [pagePath, setPagePath] = useState('');
-  const [sourceType, setSourceType] = useState<'upload' | 'capture'>('capture');
+  const [sourceType, setSourceType] = useState<'upload' | 'capture' | 'figma'>('capture');
   const [elementSelector, setElementSelector] = useState('');
   const [diffThreshold, setDiffThreshold] = useState('');
   const [maskSelectors, setMaskSelectors] = useState('');
   const [selectedViewportIds, setSelectedViewportIds] = useState<string[]>(viewports.map((v) => v.id));
+  const [figmaUrls, setFigmaUrls] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -70,11 +79,18 @@ export function BaselineDialog({
     if (baseline) {
       setName(baseline.name);
       setPagePath(baseline.pagePath);
-      setSourceType(baseline.sourceType === 'upload' ? 'upload' : 'capture');
+      setSourceType(
+        baseline.sourceType === 'upload' ? 'upload' : baseline.sourceType === 'figma' ? 'figma' : 'capture'
+      );
       setElementSelector(baseline.elementSelector ?? '');
       setDiffThreshold(baseline.diffThreshold !== null && baseline.diffThreshold !== undefined ? String(baseline.diffThreshold) : '');
       setMaskSelectors(baseline.maskSelectors.join('\n'));
       setSelectedViewportIds((baseline.targets ?? []).map((t) => t.viewportId));
+      const urls: Record<string, string> = {};
+      for (const t of baseline.targets ?? []) {
+        if (t.figmaFileKey && t.figmaNodeId) urls[t.viewportId] = figmaFrameUrl(t.figmaFileKey, t.figmaNodeId);
+      }
+      setFigmaUrls(urls);
     } else {
       setName('');
       setPagePath('');
@@ -83,6 +99,7 @@ export function BaselineDialog({
       setDiffThreshold('');
       setMaskSelectors('');
       setSelectedViewportIds(viewports.map((v) => v.id));
+      setFigmaUrls({});
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, baseline?.id]);
@@ -104,6 +121,14 @@ export function BaselineDialog({
       ...(diffThreshold.trim() ? { diffThreshold: Number(diffThreshold) } : {}),
       maskSelectors: parseMaskSelectors(maskSelectors),
       viewportIds: selectedViewportIds,
+      ...(sourceType === 'figma'
+        ? {
+            figmaFrames: selectedViewportIds.map((viewportId) => ({
+              viewportId,
+              url: (figmaUrls[viewportId] ?? '').trim(),
+            })),
+          }
+        : {}),
     })
       .then(() => setOpen(false))
       .catch((err) => setError(err instanceof ApiClientError ? err.message : 'something went wrong'))
@@ -113,7 +138,8 @@ export function BaselineDialog({
   const canSubmit =
     name.trim().length > 0 &&
     pagePath.trim().startsWith('/') &&
-    (editing || selectedViewportIds.length > 0);
+    (editing || selectedViewportIds.length > 0) &&
+    (sourceType !== 'figma' || selectedViewportIds.every((id) => (figmaUrls[id] ?? '').trim().length > 0));
 
   return (
     <Dialog open={isOpen} onOpenChange={setOpen}>
@@ -133,13 +159,14 @@ export function BaselineDialog({
           </div>
           <div className="flex flex-col gap-2">
             <Label htmlFor="baseline-source-type">Source type</Label>
-            <Select value={sourceType} onValueChange={(v) => setSourceType(v as 'upload' | 'capture')} disabled={editing}>
+            <Select value={sourceType} onValueChange={(v) => setSourceType(v as 'upload' | 'capture' | 'figma')} disabled={editing}>
               <SelectTrigger id="baseline-source-type" size="sm">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="capture">capture</SelectItem>
                 <SelectItem value="upload">upload</SelectItem>
+                <SelectItem value="figma">figma</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -191,6 +218,28 @@ export function BaselineDialog({
                   </label>
                 ))}
               </div>
+            </div>
+          )}
+          {sourceType === 'figma' && (
+            <div className="flex flex-col gap-2">
+              <Label>Figma frame URLs</Label>
+              <div className="flex flex-col gap-3">
+                {viewports
+                  .filter((v) => selectedViewportIds.includes(v.id))
+                  .map((v) => (
+                    <div key={v.id} className="flex flex-col gap-1.5">
+                      <Label htmlFor={`baseline-figma-url-${v.id}`}>{v.name}</Label>
+                      <Input
+                        id={`baseline-figma-url-${v.id}`}
+                        className="font-mono"
+                        placeholder="https://www.figma.com/design/…?node-id=…"
+                        value={figmaUrls[v.id] ?? ''}
+                        onChange={(e) => setFigmaUrls((prev) => ({ ...prev, [v.id]: e.target.value }))}
+                      />
+                    </div>
+                  ))}
+              </div>
+              <p className="text-xs text-muted-foreground">Frames are imported on the next sync.</p>
             </div>
           )}
           {error && <p className="text-sm text-status-fail">{error}</p>}

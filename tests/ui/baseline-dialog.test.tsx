@@ -1,11 +1,24 @@
 // @vitest-environment jsdom
 import { useState } from 'react';
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, beforeAll } from 'vitest';
 import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
 import { BaselineDialog, type BaselineFormValues } from '@/components/baseline-dialog';
 import { ApiClientError, type Baseline, type Viewport } from '@/lib/client';
 
 afterEach(cleanup);
+
+// jsdom doesn't implement these, but Radix Select's open/scroll/pointer-capture
+// logic calls them — polyfill so fireEvent.click can drive the real dropdown.
+beforeAll(() => {
+  Element.prototype.scrollIntoView = Element.prototype.scrollIntoView || (() => {});
+  Element.prototype.hasPointerCapture = Element.prototype.hasPointerCapture || (() => false);
+  Element.prototype.releasePointerCapture = Element.prototype.releasePointerCapture || (() => {});
+});
+
+async function chooseSourceType(value: string) {
+  fireEvent.click(screen.getByLabelText('Source type'));
+  fireEvent.click(await screen.findByRole('option', { name: value }));
+}
 
 const viewports: Viewport[] = [
   { id: 'vp1', projectId: 'p1', name: 'mobile', width: 375, height: 812 },
@@ -25,7 +38,7 @@ function baseline(overrides: Partial<Baseline> = {}): Baseline {
     syncStatus: 'ok',
     syncError: null,
     targets: [
-      { id: 't1', baselineId: 'b1', viewportId: 'vp1', versions: [] },
+      { id: 't1', baselineId: 'b1', viewportId: 'vp1', figmaFileKey: null, figmaNodeId: null, versions: [] },
     ],
     ...overrides,
   };
@@ -129,5 +142,79 @@ describe('BaselineDialog', () => {
 
     fireEvent.click(screen.getByLabelText('mobile 375×812'));
     expect((screen.getByText('Create baseline') as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  describe('figma source', () => {
+    it('reveals a frame URL input per checked viewport when figma is chosen', async () => {
+      render(<Wrapper onSubmit={vi.fn()} />);
+      await chooseSourceType('figma');
+
+      expect((screen.getByLabelText('mobile') as HTMLInputElement).placeholder).toBe(
+        'https://www.figma.com/design/…?node-id=…'
+      );
+      expect(screen.getByLabelText('desktop')).toBeDefined();
+      expect(screen.getByText('Frames are imported on the next sync.')).toBeDefined();
+
+      // unchecking a viewport drops its URL input
+      fireEvent.click(screen.getByLabelText('desktop 1440×900'));
+      expect(screen.queryByLabelText('desktop')).toBeNull();
+    });
+
+    it('disables submit until every checked viewport has a URL', async () => {
+      render(<Wrapper onSubmit={vi.fn()} />);
+      fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'figma-home' } });
+      fireEvent.change(screen.getByLabelText('Page path'), { target: { value: '/figma-home' } });
+      await chooseSourceType('figma');
+
+      expect((screen.getByText('Create baseline') as HTMLButtonElement).disabled).toBe(true);
+
+      fireEvent.change(screen.getByLabelText('mobile'), {
+        target: { value: 'https://www.figma.com/design/ABC123/Home?node-id=1-2' },
+      });
+      expect((screen.getByText('Create baseline') as HTMLButtonElement).disabled).toBe(true);
+
+      fireEvent.change(screen.getByLabelText('desktop'), {
+        target: { value: 'https://www.figma.com/design/ABC123/Home?node-id=3-4' },
+      });
+      expect((screen.getByText('Create baseline') as HTMLButtonElement).disabled).toBe(false);
+    });
+
+    it('submits figmaFrames with the typed URLs', async () => {
+      const submit = vi.fn().mockResolvedValue(undefined);
+      render(<Wrapper onSubmit={submit} />);
+      fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'figma-home' } });
+      fireEvent.change(screen.getByLabelText('Page path'), { target: { value: '/figma-home' } });
+      await chooseSourceType('figma');
+
+      fireEvent.click(screen.getByLabelText('desktop 1440×900')); // narrow selection to mobile only
+      fireEvent.change(screen.getByLabelText('mobile'), {
+        target: { value: 'https://www.figma.com/design/ABC123/Home?node-id=1-2' },
+      });
+      fireEvent.click(screen.getByText('Create baseline'));
+
+      await waitFor(() => expect(submit).toHaveBeenCalled());
+      expect(submit.mock.calls[0][0].sourceType).toBe('figma');
+      expect(submit.mock.calls[0][0].figmaFrames).toEqual([
+        { viewportId: 'vp1', url: 'https://www.figma.com/design/ABC123/Home?node-id=1-2' },
+      ]);
+    });
+
+    it('prefills reconstructed frame URLs in edit mode for a figma baseline', () => {
+      const figmaBaseline = baseline({
+        sourceType: 'figma',
+        targets: [
+          { id: 't1', baselineId: 'b1', viewportId: 'vp1', figmaFileKey: 'ABC123', figmaNodeId: '1:2', versions: [] },
+          { id: 't2', baselineId: 'b1', viewportId: 'vp2', figmaFileKey: 'ABC123', figmaNodeId: '3:4', versions: [] },
+        ],
+      });
+      render(<Wrapper onSubmit={vi.fn()} editBaseline={figmaBaseline} />);
+
+      expect((screen.getByLabelText('mobile') as HTMLInputElement).value).toBe(
+        'https://www.figma.com/design/ABC123/frame?node-id=1-2'
+      );
+      expect((screen.getByLabelText('desktop') as HTMLInputElement).value).toBe(
+        'https://www.figma.com/design/ABC123/frame?node-id=3-4'
+      );
+    });
   });
 });
