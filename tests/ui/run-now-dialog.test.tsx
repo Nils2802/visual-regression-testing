@@ -7,7 +7,7 @@ import { ApiClientError, type ProjectDetail } from '@/lib/client';
 afterEach(cleanup);
 
 const project: ProjectDetail = {
-  id: 'p1', name: 'demo', diffThreshold: 0.01, createdAt: '',
+  id: 'p1', name: 'demo', diffThreshold: 0.01, createdAt: '', figmaTokenSet: false,
   environments: [
     { id: 'e1', projectId: 'p1', name: 'staging', baseUrl: 'http://s' },
     { id: 'e2', projectId: 'p1', name: 'production', baseUrl: 'http://p' },

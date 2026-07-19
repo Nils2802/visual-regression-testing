@@ -13,6 +13,7 @@ const base: ProjectSummary = {
   createdAt: new Date().toISOString(),
   lastRun: { id: 'r1', status: 'done', createdAt: new Date().toISOString() },
   failedResultCount: 3,
+  figmaTokenSet: false,
 };
 
 describe('ProjectCard', () => {

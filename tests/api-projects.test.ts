@@ -182,4 +182,44 @@ describe('projects API', () => {
     expect((await deleteViewport(req(), ctx('nope'))).status).toBe(404);
     expect((await deleteEnvironment(req(), ctx('nope'))).status).toBe(404);
   });
+
+  describe('figma token redaction', () => {
+    process.env.VRT_ENCRYPTION_KEY = 'a'.repeat(64);
+
+    it('never leaks figmaToken and reports figmaTokenSet on every project surface', async () => {
+      const created = await (await createProject(jsonReq('POST', { name: 'figma-proj' }))).json();
+      expect('figmaToken' in created).toBe(false);
+      expect(created.figmaTokenSet).toBe(false);
+
+      const list = await (await listProjects()).json();
+      for (const p of list.projects) {
+        expect('figmaToken' in p).toBe(false);
+        expect(typeof p.figmaTokenSet).toBe('boolean');
+      }
+
+      const detail = await (await getProject(new Request('http://test.local'), ctx(created.id))).json();
+      expect('figmaToken' in detail).toBe(false);
+      expect(detail.figmaTokenSet).toBe(false);
+
+      const patched = await (
+        await patchProject(jsonReq('PATCH', { figmaToken: 'figd_x' }), ctx(created.id))
+      ).json();
+      expect('figmaToken' in patched).toBe(false);
+      expect(patched.figmaTokenSet).toBe(true);
+
+      const row = await prisma.project.findUniqueOrThrow({ where: { id: created.id } });
+      expect(row.figmaToken).not.toBeNull();
+      expect(row.figmaToken!.startsWith('v1:')).toBe(true);
+      expect(row.figmaToken).not.toContain('figd_x');
+
+      const cleared = await (
+        await patchProject(jsonReq('PATCH', { figmaToken: null }), ctx(created.id))
+      ).json();
+      expect('figmaToken' in cleared).toBe(false);
+      expect(cleared.figmaTokenSet).toBe(false);
+
+      const rowAfterClear = await prisma.project.findUniqueOrThrow({ where: { id: created.id } });
+      expect(rowAfterClear.figmaToken).toBeNull();
+    });
+  });
 });

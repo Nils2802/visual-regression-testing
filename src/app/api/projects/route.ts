@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { prisma } from '@/lib/db';
-import { readJson } from '@/lib/api';
+import { readJson, serializeProject } from '@/lib/api';
 
 const createSchema = z.object({
   name: z.string().min(1),
@@ -30,7 +30,7 @@ export async function GET(): Promise<Response> {
           ).length
         : 0;
       return {
-        ...p,
+        ...serializeProject(p),
         lastRun: lastRun
           ? { id: lastRun.id, status: lastRun.status, createdAt: lastRun.createdAt }
           : null,
@@ -44,5 +44,5 @@ export async function POST(req: Request): Promise<Response> {
   const body = await readJson(req, createSchema);
   if (!body.ok) return body.res;
   const project = await prisma.project.create({ data: body.data });
-  return Response.json(project, { status: 201 });
+  return Response.json(serializeProject(project), { status: 201 });
 }

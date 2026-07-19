@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { api, type ProjectDetail, type IgnoreRule } from '@/lib/client';
@@ -8,6 +8,7 @@ import { EnvironmentsTable } from '@/components/settings/environments-table';
 import { ViewportsTable } from '@/components/settings/viewports-table';
 import { IgnoreRulesTable } from '@/components/settings/ignore-rules-table';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { useLoad } from '@/lib/use-load';
 
 interface ProjectSettingsData {
@@ -30,6 +31,24 @@ export default function ProjectSettingsPage() {
   const { data, error, reload, fail } = useLoad<ProjectSettingsData>(fetchSettings);
   const project = data?.project ?? null;
   const rules = data?.rules ?? null;
+
+  const [figmaTokenInput, setFigmaTokenInput] = useState('');
+  const [replacingFigmaToken, setReplacingFigmaToken] = useState(false);
+
+  const saveFigmaToken = useCallback(() => {
+    api.projects
+      .update(projectId, { figmaToken: figmaTokenInput })
+      .then(() => {
+        setFigmaTokenInput('');
+        setReplacingFigmaToken(false);
+        reload();
+      })
+      .catch(fail);
+  }, [projectId, figmaTokenInput, reload, fail]);
+
+  const clearFigmaToken = useCallback(() => {
+    api.projects.update(projectId, { figmaToken: null }).then(reload).catch(fail);
+  }, [projectId, reload, fail]);
 
   const addEnvironment = useCallback(
     (body: { name: string; baseUrl: string }) => {
@@ -97,6 +116,48 @@ export default function ProjectSettingsPage() {
       </div>
 
       {error && <p className="text-sm text-status-fail">{error}</p>}
+
+      <section className="flex flex-col gap-4">
+        <h2 className="font-display text-lg font-semibold tracking-tight">Figma</h2>
+        {project.figmaTokenSet && !replacingFigmaToken ? (
+          <div className="flex items-center gap-3">
+            <span className="font-mono text-sm text-muted">Token set</span>
+            <Button type="button" variant="outline" size="sm" onClick={() => setReplacingFigmaToken(true)}>
+              Replace
+            </Button>
+            <Button type="button" variant="outline" size="sm" onClick={clearFigmaToken}>
+              Clear
+            </Button>
+          </div>
+        ) : (
+          <div className="flex flex-wrap items-end gap-2">
+            <div className="flex flex-col gap-1">
+              <Input
+                type="password"
+                placeholder="figd_…"
+                value={figmaTokenInput}
+                onChange={(e) => setFigmaTokenInput(e.target.value)}
+              />
+            </div>
+            <Button type="button" disabled={figmaTokenInput.trim().length === 0} onClick={saveFigmaToken}>
+              Save
+            </Button>
+            {project.figmaTokenSet && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setReplacingFigmaToken(false);
+                  setFigmaTokenInput('');
+                }}
+              >
+                Cancel
+              </Button>
+            )}
+          </div>
+        )}
+      </section>
 
       <section className="flex flex-col gap-4">
         <h2 className="font-display text-lg font-semibold tracking-tight">Environments</h2>

@@ -8,6 +8,7 @@ export default function setup() {
   // Test workers inherit this; Prisma's dotenv load does not override
   // an already-set env var, so tests hit test.db instead of .env's dev.db.
   process.env.DATABASE_URL = TEST_DATABASE_URL;
+  process.env.VRT_ENCRYPTION_KEY ??= 'a'.repeat(64);
   execSync('npx prisma db push --force-reset --skip-generate', {
     stdio: 'inherit',
     env: {

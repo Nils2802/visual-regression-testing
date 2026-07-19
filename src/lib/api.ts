@@ -24,6 +24,16 @@ export function serializeRun<T extends { viewportIds: string }>(
   return { ...run, viewportIds: JSON.parse(run.viewportIds) as string[] };
 }
 
+// Strips the encrypted figmaToken from every project response, replacing it
+// with a boolean so clients can tell whether a token is set without ever
+// seeing plaintext or ciphertext.
+export function serializeProject<T extends { figmaToken: string | null }>(
+  project: T
+): Omit<T, 'figmaToken'> & { figmaTokenSet: boolean } {
+  const { figmaToken, ...rest } = project;
+  return { ...rest, figmaTokenSet: figmaToken !== null };
+}
+
 export async function readJson<S extends z.ZodTypeAny>(
   req: Request,
   schema: S
