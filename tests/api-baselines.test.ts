@@ -8,6 +8,7 @@ import {
   DELETE as deleteBaseline,
 } from '@/app/api/baselines/[id]/route';
 import { POST as uploadVersion } from '@/app/api/baselines/[id]/targets/[viewportId]/versions/route';
+import { POST as syncBaselineRoute } from '@/app/api/baselines/[id]/sync/route';
 
 let projectId: string;
 let vpMobile: string;
@@ -215,5 +216,35 @@ describe('baselines API', () => {
   it('404s PATCH and DELETE on unknown ids', async () => {
     expect((await patchBaseline(jsonReq({ name: 'x' }, 'PATCH'), ctx('nope'))).status).toBe(404);
     expect((await deleteBaseline(new Request('http://test.local'), ctx('nope'))).status).toBe(404);
+  });
+
+  // The route always exercises the real (unmockable) network fetch, so it can
+  // only cover paths that fail before any Figma call is made: unknown
+  // baseline (404) and no-figma-linked-targets (422). syncBaseline's batching,
+  // scale-grouping, sync-error recording, and network-failure paths are
+  // covered at the service level in tests/figma-sync.test.ts against a
+  // recording fake FetchLike, which the route has no way to inject.
+  describe('POST /api/baselines/:id/sync', () => {
+    it('404s on an unknown baseline', async () => {
+      const res = await syncBaselineRoute(new Request('http://test.local', { method: 'POST' }), ctx('nope'));
+      expect(res.status).toBe(404);
+    });
+
+    it('422s a baseline with no Figma-linked targets, and records sync-error', async () => {
+      const created = await createBaseline(
+        jsonReq({ name: 'no-figma', pagePath: '/no-figma', sourceType: 'capture' }),
+        ctx(projectId)
+      );
+      const baseline = await created.json();
+
+      const res = await syncBaselineRoute(new Request('http://test.local', { method: 'POST' }), ctx(baseline.id));
+      expect(res.status).toBe(422);
+      const body = await res.json();
+      expect(body.error).toBe('baseline has no Figma-linked targets');
+
+      const row = await prisma.baseline.findUniqueOrThrow({ where: { id: baseline.id } });
+      expect(row.syncStatus).toBe('sync-error');
+      expect(row.syncError).toBe('baseline has no Figma-linked targets');
+    });
   });
 });

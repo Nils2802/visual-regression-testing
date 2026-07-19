@@ -39,7 +39,7 @@ export interface Viewport { id: string; projectId: string; name: string; width: 
 export interface BaselineVersion { id: string; targetId: string; imagePath: string; status: string; isActive: boolean; createdAt: string }
 export interface BaselineTarget { id: string; baselineId: string; viewportId: string; viewport?: Viewport; versions?: BaselineVersion[] }
 export interface BaselineTargetDetail extends BaselineTarget { viewport: Viewport; versions: BaselineVersion[] }
-export interface Baseline { id: string; projectId: string; name: string; pagePath: string; elementSelector: string | null; diffThreshold: number | null; maskSelectors: string[]; sourceType: string; syncStatus: string; targets?: BaselineTarget[] }
+export interface Baseline { id: string; projectId: string; name: string; pagePath: string; elementSelector: string | null; diffThreshold: number | null; maskSelectors: string[]; sourceType: string; syncStatus: string; syncError: string | null; targets?: BaselineTarget[] }
 export interface BaselineDetail extends Baseline { targets: BaselineTargetDetail[] }
 export interface Project { id: string; name: string; diffThreshold: number; createdAt: string; figmaTokenSet: boolean }
 export interface ProjectSummary extends Project { lastRun: { id: string; status: string; createdAt: string } | null; failedResultCount: number }
@@ -78,6 +78,7 @@ export const api = {
     update: (id: string, body: Partial<{ name: string; pagePath: string; elementSelector: string | null; diffThreshold: number | null; maskSelectors: string[] }>) => request<Baseline>('PATCH', `/api/baselines/${id}`, body),
     delete: (id: string) => request<undefined>('DELETE', `/api/baselines/${id}`),
     uploadVersion: (baselineId: string, viewportId: string, png: Uint8Array) => request<BaselineVersion>('POST', `/api/baselines/${baselineId}/targets/${viewportId}/versions`, png),
+    sync: (id: string) => request<BaselineDetail>('POST', `/api/baselines/${id}/sync`),
   },
   versions: {
     approve: (id: string) => request<BaselineVersion>('POST', `/api/versions/${id}/approve`),

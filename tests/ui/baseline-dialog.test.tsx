@@ -23,6 +23,7 @@ function baseline(overrides: Partial<Baseline> = {}): Baseline {
     maskSelectors: ['.timestamp', '.ad-slot'],
     sourceType: 'capture',
     syncStatus: 'ok',
+    syncError: null,
     targets: [
       { id: 't1', baselineId: 'b1', viewportId: 'vp1', versions: [] },
     ],

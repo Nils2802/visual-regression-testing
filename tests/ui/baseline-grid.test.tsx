@@ -19,6 +19,7 @@ function baseline(overrides: Partial<Baseline>): Baseline {
     maskSelectors: [],
     sourceType: 'capture',
     syncStatus: 'ok',
+    syncError: null,
     targets: [
       {
         id: 't1',
