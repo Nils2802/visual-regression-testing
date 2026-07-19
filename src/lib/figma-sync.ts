@@ -66,16 +66,28 @@ export async function syncBaseline(baselineId: string, fetchImpl?: FetchLike): P
       }
     }
 
+    // Export phase: run every group's exportNodeImages call first and only
+    // collect the resulting pngs in memory. If any group fails (network
+    // error, a node's export failing, a 502, ...), nothing has been written
+    // yet — the outer catch fires the same sync-error path as any
+    // pre-loop validation failure, with zero partial versions left behind.
+    const exported: { target: LinkedTarget; png: Buffer }[] = [];
     for (const group of groups.values()) {
       const nodeIds = [...new Set(group.targets.map((t) => t.figmaNodeId))];
       const images = await exportNodeImages(token, group.fileKey, nodeIds, group.scale, fetchImpl);
       for (const target of group.targets) {
-        const png = images.get(target.figmaNodeId)!;
-        const imagePath = await saveImage('baselines', `${target.id}-${Date.now()}`, png);
-        await prisma.baselineVersion.create({
-          data: { targetId: target.id, imagePath, status: 'pending' },
-        });
+        exported.push({ target, png: images.get(target.figmaNodeId)! });
       }
+    }
+
+    // Write phase: only reached once every group above exported cleanly.
+    // Export is all-or-nothing; write-phase failures can still be partial
+    // (disk/DB).
+    for (const { target, png } of exported) {
+      const imagePath = await saveImage('baselines', `${target.id}-${Date.now()}`, png);
+      await prisma.baselineVersion.create({
+        data: { targetId: target.id, imagePath, status: 'pending' },
+      });
     }
 
     await prisma.baseline.update({

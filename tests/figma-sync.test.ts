@@ -12,7 +12,10 @@ function toArrayBuffer(buf: Buffer): ArrayBuffer {
 
 // Records every fetch call (by URL) so tests can assert on batching, and
 // serves synthetic /v1/files, /v1/images, and image-download responses.
-function recordingFetch(widths: Record<string, number>, opts: { forbidden?: boolean } = {}) {
+function recordingFetch(
+  widths: Record<string, number>,
+  opts: { forbidden?: boolean; failImagesForIds?: string[] } = {}
+) {
   const calls: string[] = [];
   const fetchImpl: FetchLike = async (url) => {
     calls.push(url);
@@ -34,6 +37,9 @@ function recordingFetch(widths: Record<string, number>, opts: { forbidden?: bool
     }
     if (url.includes('/v1/images/')) {
       const ids = (new URL(url).searchParams.get('ids') ?? '').split(',');
+      if (opts.failImagesForIds && ids.some((id) => opts.failImagesForIds!.includes(id))) {
+        return { ok: false, status: 502, json: async () => ({}), arrayBuffer: async () => new ArrayBuffer(0) };
+      }
       return {
         ok: true,
         status: 200,
@@ -125,6 +131,34 @@ describe('syncBaseline', () => {
     expect(imagesCalls).toHaveLength(1);
     expect(imagesCalls[0]).toContain(encodeURIComponent('1:1'));
     expect(imagesCalls[0]).toContain(encodeURIComponent('2:2'));
+  });
+
+  it('partial multi-group export failure is atomic: a later group failing leaves zero versions from an earlier group that already exported', async () => {
+    const project = await seedProject();
+    const baseline = await seedBaseline(project.id);
+    const targetA = await seedTarget(project.id, baseline.id, { nodeId: '1:1', viewportWidth: 1440 }); // group 1: scale 1
+    const targetB = await seedTarget(project.id, baseline.id, { nodeId: '2:2', viewportWidth: 750 }); // group 2: scale 0.5
+
+    // Both groups' widths resolve fine; group 1's export ('1:1') succeeds,
+    // group 2's export ('2:2') fails with a 502 — simulating a transient
+    // network error partway through a multi-group sync.
+    const { fetchImpl } = recordingFetch(
+      { '1:1': 1440, '2:2': 1500 },
+      { failImagesForIds: ['2:2'] }
+    );
+
+    await expect(syncBaseline(baseline.id, fetchImpl)).rejects.toThrow('Figma API error (502)');
+
+    const refreshed = await prisma.baseline.findUniqueOrThrow({ where: { id: baseline.id } });
+    expect(refreshed.syncStatus).toBe('sync-error');
+
+    // Neither target got a pending version — group 1's successful export was
+    // never written because the write phase only runs after every group's
+    // export has succeeded.
+    const versionsA = await prisma.baselineVersion.findMany({ where: { targetId: targetA.id } });
+    const versionsB = await prisma.baselineVersion.findMany({ where: { targetId: targetB.id } });
+    expect(versionsA).toHaveLength(0);
+    expect(versionsB).toHaveLength(0);
   });
 
   it('incompatible frame width (375 vs 1440) rejects: baseline sync-error, syncError contains "incompatible", no version created', async () => {
