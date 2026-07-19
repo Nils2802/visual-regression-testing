@@ -32,13 +32,21 @@ export async function PATCH(req: Request, ctx: Ctx): Promise<Response> {
   const { id } = await ctx.params;
   const body = await readJson(req, patchSchema);
   if (!body.ok) return body.res;
-  const existing = await prisma.baseline.findUnique({ where: { id } });
+  const existing = await prisma.baseline.findUnique({
+    where: { id },
+    include: { targets: { select: { viewportId: true } } },
+  });
   if (!existing) return jsonError(404, 'baseline not found');
   const { maskSelectors, figmaFrames, ...fields } = body.data;
 
   if (figmaFrames !== undefined) {
     if (existing.sourceType !== 'figma') {
       return jsonError(400, 'figmaFrames only allowed on figma-sourced baselines');
+    }
+    const targetViewportIds = new Set(existing.targets.map((t) => t.viewportId));
+    const unknownViewport = figmaFrames.find((f) => !targetViewportIds.has(f.viewportId));
+    if (unknownViewport) {
+      return jsonError(400, `figmaFrames viewportId ${unknownViewport.viewportId} does not match a baseline target`);
     }
     let parsed: { viewportId: string; fileKey: string; nodeId: string }[];
     try {

@@ -347,6 +347,36 @@ describe('baselines API', () => {
       expect(target.figmaFileKey).toBe('XYZ999');
       expect(target.figmaNodeId).toBe('5:6');
     });
+
+    it('rejects a figmaFrames PATCH with a viewportId that does not match a baseline target, leaving targets unchanged', async () => {
+      const created = await createBaseline(
+        jsonReq({
+          name: 'figma-bogus-viewport',
+          pagePath: '/figma-bogus-viewport',
+          sourceType: 'figma',
+          viewportIds: [vpMobile],
+          figmaFrames: [{ viewportId: vpMobile, url: 'https://www.figma.com/design/ABC123/Home?node-id=1-2' }],
+        }),
+        ctx(projectId)
+      );
+      const baseline = await created.json();
+
+      const res = await patchBaseline(
+        jsonReq(
+          { figmaFrames: [{ viewportId: vpDesktop, url: 'https://www.figma.com/design/XYZ999/Home?node-id=5-6' }] },
+          'PATCH'
+        ),
+        ctx(baseline.id)
+      );
+      expect(res.status).toBe(400);
+      const body = await res.json();
+      expect(body.error).toBe(`figmaFrames viewportId ${vpDesktop} does not match a baseline target`);
+
+      const detail = await (await getBaseline(new Request('http://test.local'), ctx(baseline.id))).json();
+      const target = detail.targets.find((t: { viewportId: string }) => t.viewportId === vpMobile);
+      expect(target.figmaFileKey).toBe('ABC123');
+      expect(target.figmaNodeId).toBe('1:2');
+    });
   });
 
   // The route always exercises the real (unmockable) network fetch, so it can
