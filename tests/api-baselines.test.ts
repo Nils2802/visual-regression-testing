@@ -391,7 +391,7 @@ describe('baselines API', () => {
       expect(res.status).toBe(404);
     });
 
-    it('422s a baseline with no Figma-linked targets, and records sync-error', async () => {
+    it('400s a non-figma baseline without enqueueing a sync-error', async () => {
       const created = await createBaseline(
         jsonReq({ name: 'no-figma', pagePath: '/no-figma', sourceType: 'capture' }),
         ctx(projectId)
@@ -399,13 +399,13 @@ describe('baselines API', () => {
       const baseline = await created.json();
 
       const res = await syncBaselineRoute(new Request('http://test.local', { method: 'POST' }), ctx(baseline.id));
-      expect(res.status).toBe(422);
+      expect(res.status).toBe(400);
       const body = await res.json();
-      expect(body.error).toBe('baseline has no Figma-linked targets');
+      expect(body.error).toBe('only figma-sourced baselines can be synced');
 
       const row = await prisma.baseline.findUniqueOrThrow({ where: { id: baseline.id } });
-      expect(row.syncStatus).toBe('sync-error');
-      expect(row.syncError).toBe('baseline has no Figma-linked targets');
+      expect(row.syncStatus).not.toBe('sync-error');
+      expect(row.syncError).toBeNull();
     });
   });
 });

@@ -51,6 +51,7 @@ export default function ProjectDetailPage() {
           elementSelector: values.elementSelector ?? null,
           diffThreshold: values.diffThreshold ?? null,
           maskSelectors: values.maskSelectors ?? [],
+          ...(values.figmaFrames ? { figmaFrames: values.figmaFrames } : {}),
         })
         .then(reload);
     },
@@ -123,7 +124,10 @@ export default function ProjectDetailPage() {
           onEdit={setEditingBaseline}
           onDelete={deleteBaseline}
           onSynced={reload}
-          onSyncError={fail}
+          onSyncError={(err) => {
+            fail(err);
+            reload();
+          }}
         />
       )}
 

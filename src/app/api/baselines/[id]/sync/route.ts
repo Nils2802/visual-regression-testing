@@ -8,6 +8,9 @@ export async function POST(_req: Request, ctx: Ctx): Promise<Response> {
   const { id } = await ctx.params;
   const existing = await prisma.baseline.findUnique({ where: { id } });
   if (!existing) return jsonError(404, 'baseline not found');
+  if (existing.sourceType !== 'figma') {
+    return jsonError(400, 'only figma-sourced baselines can be synced');
+  }
 
   try {
     await enqueueSync(() => syncBaseline(id));

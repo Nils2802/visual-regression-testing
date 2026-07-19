@@ -36,7 +36,7 @@ export function parseFigmaFrameUrl(url: string): { fileKey: string; nodeId: stri
 
 export function computeScale(frameWidth: number, viewportWidth: number): number {
   const raw = viewportWidth / frameWidth;
-  if (raw > 1.02 || raw > 4 || raw < 0.01) {
+  if (raw > 1.02 || raw < 0.01) {
     throw new ApiError(
       422,
       `frame width ${frameWidth}px incompatible with viewport width ${viewportWidth}px`
