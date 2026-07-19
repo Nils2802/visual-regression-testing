@@ -4,6 +4,7 @@ import { enqueue } from '@/lib/queue';
 import { executeRun } from '@/lib/runner';
 import { getBrowser } from '@/lib/browser';
 import { ApiError } from '@/lib/api-error';
+import { syncBaseline } from '@/lib/figma-sync';
 
 export interface StartRunInput {
   projectId: string;
@@ -58,7 +59,26 @@ export async function startRun(input: StartRunInput): Promise<Run> {
   // catch below covers failures BEFORE executeRun takes over (browser launch
   // failure, run row deleted before the job starts): log them and mark the
   // run failed if it is still non-terminal, so it never sits at `queued`.
-  void enqueue(async () => executeRun(run.id, await getBrowser())).catch(async (err) => {
+  void enqueue(async () => {
+    if (project.syncBeforeRun) {
+      const figmaBaselines = await prisma.baseline.findMany({
+        where: { projectId: project.id, sourceType: 'figma' },
+        select: { id: true },
+      });
+      for (const baseline of figmaBaselines) {
+        // syncBaseline records sync-error (message + last approved version
+        // stays active) on the baseline itself before rethrowing — swallow
+        // here so a Figma failure never fails the run (spec §4). Called
+        // directly rather than via figma-sync's enqueueSync: this job is
+        // already serialized on the run queue, so awaiting each sync in
+        // order already gives the ordering enqueueSync would provide;
+        // routing through the separate sync-only chain would just add a
+        // hop with no different guarantee for these baselines.
+        await syncBaseline(baseline.id).catch(() => {});
+      }
+    }
+    return executeRun(run.id, await getBrowser());
+  }).catch(async (err) => {
     console.error(`run ${run.id} failed before execution:`, err);
     await prisma.run
       .updateMany({

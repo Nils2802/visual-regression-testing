@@ -14,6 +14,7 @@ const base: ProjectSummary = {
   lastRun: { id: 'r1', status: 'done', createdAt: new Date().toISOString() },
   failedResultCount: 3,
   figmaTokenSet: false,
+  syncBeforeRun: false,
 };
 
 describe('ProjectCard', () => {

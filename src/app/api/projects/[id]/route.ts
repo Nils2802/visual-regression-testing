@@ -9,6 +9,7 @@ const patchSchema = z.object({
   name: z.string().min(1).optional(),
   diffThreshold: z.number().gt(0).lt(1).optional(),
   figmaToken: z.string().min(1).nullable().optional(),
+  syncBeforeRun: z.boolean().optional(),
 });
 
 export async function GET(_req: Request, ctx: Ctx): Promise<Response> {

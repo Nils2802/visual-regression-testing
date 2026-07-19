@@ -50,6 +50,13 @@ export default function ProjectSettingsPage() {
     api.projects.update(projectId, { figmaToken: null }).then(reload).catch(fail);
   }, [projectId, reload, fail]);
 
+  const setSyncBeforeRun = useCallback(
+    (checked: boolean) => {
+      api.projects.update(projectId, { syncBeforeRun: checked }).then(reload).catch(fail);
+    },
+    [projectId, reload, fail]
+  );
+
   const addEnvironment = useCallback(
     (body: { name: string; baseUrl: string }) => {
       api.environments.create(projectId, body).then(reload).catch(fail);
@@ -157,6 +164,14 @@ export default function ProjectSettingsPage() {
             )}
           </div>
         )}
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={project.syncBeforeRun}
+            onChange={(e) => setSyncBeforeRun(e.target.checked)}
+          />
+          Sync baselines from Figma before every run
+        </label>
       </section>
 
       <section className="flex flex-col gap-4">

@@ -11,6 +11,7 @@ model Project {
   id            String        @id @default(cuid())
   name          String
   figmaToken    String? // encrypted at rest (encryption in phase 4)
+  syncBeforeRun Boolean       @default(false)
   diffThreshold Float         @default(0.01)
   crawlStartUrls String       @default("[]") // JSON string[]
   crawlMaxDepth Int           @default(3)

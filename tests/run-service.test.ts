@@ -152,6 +152,56 @@ describe('runs API', () => {
   });
 });
 
+describe('sync-before-run', () => {
+  async function seedFigmaProject(syncBeforeRun: boolean) {
+    const project = await prisma.project.create({
+      data: {
+        name: `sync-before-run-${syncBeforeRun}-${Date.now()}-${Math.random()}`,
+        syncBeforeRun,
+        viewports: { create: [{ name: 'desktop', width: 800, height: 600 }] },
+      },
+      include: { viewports: true },
+    });
+    const env = await prisma.environment.create({
+      data: { projectId: project.id, name: 'test', baseUrl: server.url },
+    });
+    const baseline = await prisma.baseline.create({
+      data: {
+        projectId: project.id,
+        name: 'figma-home',
+        pagePath: '/',
+        sourceType: 'figma',
+        targets: {
+          create: [{ viewportId: project.viewports[0].id, figmaFileKey: 'FILE1', figmaNodeId: '1:1' }],
+        },
+      },
+    });
+    return { project, env, baseline };
+  }
+
+  it('syncBeforeRun true + sync failure (no token): run still reaches a terminal state, baseline ends sync-error', async () => {
+    const { project, env, baseline } = await seedFigmaProject(true);
+
+    const run = await startRun({ projectId: project.id, environmentId: env.id });
+    expect(await waitForTerminal(run.id)).toBe('done');
+
+    const updated = await prisma.baseline.findUniqueOrThrow({ where: { id: baseline.id } });
+    expect(updated.syncStatus).toBe('sync-error');
+    expect(updated.syncError).toContain('Figma token');
+  });
+
+  it('syncBeforeRun false: no sync attempted, syncStatus stays ok', async () => {
+    const { project, env, baseline } = await seedFigmaProject(false);
+
+    const run = await startRun({ projectId: project.id, environmentId: env.id });
+    expect(await waitForTerminal(run.id)).toBe('done');
+
+    const updated = await prisma.baseline.findUniqueOrThrow({ where: { id: baseline.id } });
+    expect(updated.syncStatus).toBe('ok');
+    expect(updated.syncError).toBeNull();
+  });
+});
+
 describe('pre-execution failure handling', () => {
   it('recovers the browser singleton after a failed launch', async () => {
     await closeBrowser();

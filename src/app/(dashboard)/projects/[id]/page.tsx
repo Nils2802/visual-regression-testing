@@ -122,6 +122,8 @@ export default function ProjectDetailPage() {
           onUpload={uploadVersion}
           onEdit={setEditingBaseline}
           onDelete={deleteBaseline}
+          onSynced={reload}
+          onSyncError={fail}
         />
       )}
 

@@ -1,12 +1,12 @@
 'use client';
 
 import { useState } from 'react';
-import { Trash2, Pencil } from 'lucide-react';
+import { Trash2, Pencil, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { StatusBadge } from '@/components/status-badge';
 import { ViewportChip } from '@/components/viewport-chip';
-import { imageUrl, type Baseline, type BaselineTarget, type Viewport } from '@/lib/client';
+import { api, imageUrl, type Baseline, type BaselineDetail, type BaselineTarget, type Viewport } from '@/lib/client';
 
 function resolveViewport(target: BaselineTarget, viewports: Viewport[]): Viewport | undefined {
   return target.viewport ?? viewports.find((v) => v.id === target.viewportId);
@@ -85,18 +85,52 @@ function UploadRow({
   );
 }
 
+function SyncButton({
+  baselineId,
+  syncFn,
+  onSynced,
+  onSyncError,
+}: {
+  baselineId: string;
+  syncFn: (id: string) => Promise<BaselineDetail>;
+  onSynced: () => void;
+  onSyncError: (err: unknown) => void;
+}) {
+  const [syncing, setSyncing] = useState(false);
+
+  function handleSync() {
+    setSyncing(true);
+    syncFn(baselineId)
+      .then(onSynced)
+      .catch(onSyncError)
+      .finally(() => setSyncing(false));
+  }
+
+  return (
+    <Button type="button" variant="ghost" size="icon-xs" aria-label="Sync from Figma" disabled={syncing} onClick={handleSync}>
+      <RefreshCw className={`size-3 ${syncing ? 'animate-spin' : ''}`} />
+    </Button>
+  );
+}
+
 function BaselineCard({
   baseline,
   viewports,
   onUpload,
   onEdit,
   onDelete,
+  syncFn,
+  onSynced,
+  onSyncError,
 }: {
   baseline: Baseline;
   viewports: Viewport[];
   onUpload: (baselineId: string, viewportId: string, bytes: Uint8Array) => void;
   onEdit: (baseline: Baseline) => void;
   onDelete: (id: string) => void;
+  syncFn: (id: string) => Promise<BaselineDetail>;
+  onSynced: () => void;
+  onSyncError: (err: unknown) => void;
 }) {
   const targets = baseline.targets ?? [];
   const thumbnailPath = activeApprovedThumbnail(targets);
@@ -118,6 +152,9 @@ function BaselineCard({
         <div className="flex items-start justify-between gap-2">
           <h3 className="font-display text-sm font-semibold tracking-tight">{baseline.name}</h3>
           <div className="flex items-center gap-1">
+            {baseline.sourceType === 'figma' && (
+              <SyncButton baselineId={baseline.id} syncFn={syncFn} onSynced={onSynced} onSyncError={onSyncError} />
+            )}
             <Button type="button" variant="ghost" size="icon-xs" aria-label={`Edit ${baseline.name}`} onClick={() => onEdit(baseline)}>
               <Pencil className="size-3" />
             </Button>
@@ -142,6 +179,11 @@ function BaselineCard({
           <span>{baseline.sourceType}</span>
           {baseline.syncStatus === 'sync-error' && <StatusBadge kind="version" value="sync-error" />}
         </div>
+        {baseline.syncStatus === 'sync-error' && baseline.syncError && (
+          <p className="truncate text-xs text-status-fail" title={baseline.syncError}>
+            {baseline.syncError}
+          </p>
+        )}
       </div>
       <UploadRow baselineId={baseline.id} targets={targets} viewports={viewports} onUpload={onUpload} />
     </div>
@@ -154,17 +196,33 @@ export function BaselineGrid({
   onUpload,
   onEdit,
   onDelete,
+  syncFn = api.baselines.sync,
+  onSynced = () => {},
+  onSyncError = () => {},
 }: {
   baselines: Baseline[];
   viewports: Viewport[];
   onUpload: (baselineId: string, viewportId: string, bytes: Uint8Array) => void;
   onEdit: (baseline: Baseline) => void;
   onDelete: (id: string) => void;
+  syncFn?: (id: string) => Promise<BaselineDetail>;
+  onSynced?: () => void;
+  onSyncError?: (err: unknown) => void;
 }) {
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {baselines.map((baseline) => (
-        <BaselineCard key={baseline.id} baseline={baseline} viewports={viewports} onUpload={onUpload} onEdit={onEdit} onDelete={onDelete} />
+        <BaselineCard
+          key={baseline.id}
+          baseline={baseline}
+          viewports={viewports}
+          onUpload={onUpload}
+          onEdit={onEdit}
+          onDelete={onDelete}
+          syncFn={syncFn}
+          onSynced={onSynced}
+          onSyncError={onSyncError}
+        />
       ))}
     </div>
   );
